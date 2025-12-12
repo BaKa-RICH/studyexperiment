@@ -1,0 +1,3 @@
+timestamp,collision_id,vehicle1,vehicle2,collision_type
+11.75,collision_0,lead_truck_02,subject_car_01,collision
+15.9,collision_1,routeFlow_1.1,routeFlow_4.0,collision

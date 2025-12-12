@@ -1,0 +1,5 @@
+timestamp,collision_id,vehicle1,vehicle2,collision_type
+55.2,collision_0,flow_north_south_car.2,emergency1.4,junction
+64.0,collision_6,flow_south_north_car.0,emergency1.5,junction
+74.4,collision_9,flow_north_south_truck.5,flow_west_to_east.1,junction
+144.3,collision_12,flow_south_north_truck.11,emergency1.13,junction

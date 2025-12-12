@@ -1,0 +1,2 @@
+timestamp,collision_id,vehicle1,vehicle2,collision_type
+52.9,collision_0,flow_east_north_left.3,flow_north_east_right.0,junction

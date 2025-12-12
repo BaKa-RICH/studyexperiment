@@ -1,0 +1,14 @@
+sumo_cfg_file = "./suzhou_bridge_replay/Suzhou.sumocfg"
+step_length = 0.05
+carla_host = "127.0.0.1"
+carla_port = 2000
+sumo_host = None
+sumo_port = None
+sumo_gui = True
+client_order = 1
+sync_vehicle_lights = False
+sync_vehicle_color = False
+sync_vehicle_all = False
+tls_manager = "none"
+debug = False
+

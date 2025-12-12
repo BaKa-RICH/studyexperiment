@@ -1,0 +1,8 @@
+timestamp,collision_id,vehicle1,vehicle2,collision_type
+11.75,collision_0,lead_truck_02,subject_car_01,collision
+15.9,collision_1,routeFlow_1.1,routeFlow_4.0,collision
+17.4,collision_2,routeFlow_2.1,routeFlow_4.1,collision
+21.05,collision_3,routeFlow_1.4,routeFlow_4.3,collision
+22.1,collision_4,routeFlow_1.1,routeFlow_1.2,collision
+23.95,collision_5,routeFlow_1.7,routeFlow_4.5,collision
+24.7,collision_6,routeFlow_3.3,routeFlow_4.2,collision

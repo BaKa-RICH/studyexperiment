@@ -1,0 +1,29 @@
+<configure>
+
+    <input>    
+        <net-file value="SuzhouNorthStation.net.xml"/>
+        <route-files value="carlavtypes.rou.xml, handmade.rou.xml"/>
+    </input>
+
+
+    <time>
+        <begin value="0"/>
+        <end value="15000"/>
+        <step-length value="0.05"/>
+    </time>
+
+    <gui_only>
+        <gui-settings-file value="osm.view.xml"/>
+    </gui_only>
+
+    <simulation>
+        <collision.check-junctions value="true"/>
+        <collision.action value="warn"/>
+    </simulation>
+
+    <processing>
+        <collision.mingap-factor value="1"/>
+        <lateral-resolution value="0.25"/>
+    </processing>
+
+</configure>

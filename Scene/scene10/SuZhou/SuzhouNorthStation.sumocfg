@@ -1,0 +1,26 @@
+<configure>
+    <input>    
+        <net-file value="SuzhouNorthStation.net.xml"/>
+        <route-files value="carlavtypes.rou.xml, handmade.rou.xml"/>
+    </input>
+    <time>
+        <!-- 仿真开始和结束时间 -->
+        <begin value="0"/>
+        <end value="15000"/>
+    </time>
+
+    <gui_only>
+        <gui-settings-file value="osm.view.xml"/>
+    </gui_only>
+
+    <processing>
+        <!-- 设置车辆间最小安全距离的系数, 0表示不考虑 -->
+        <collision.mingap-factor value="0.5"/>
+
+        <!-- 仅输出警告日志，不终止仿真 -->
+        <collision.action value="warn"/>
+
+        <lateral-resolution value="0.25"/>
+
+    </processing>
+</configure>

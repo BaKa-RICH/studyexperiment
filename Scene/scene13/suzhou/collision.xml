@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 2025-07-27 17:36:25 by Eclipse SUMO GUI Version 1.23.1
+<sumoConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+
+    <input>
+        <net-file value="D:\桌面\sumo_random\suzhou\Suzhou.net.xml"/>
+        <route-files value="D:\桌面\sumo_random\suzhou\carlavtypes.rou.xml,D:\桌面\sumo_random\suzhou\myroutes.rou.xml"/>
+    </input>
+
+    <output>
+        <collision-output value="D:\桌面\sumo_random\suzhou\collision.xml"/>
+    </output>
+
+    <time>
+        <begin value="0"/>
+        <end value="3600"/>
+        <step-length value="0.1"/>
+    </time>
+
+    <processing>
+        <lateral-resolution value="0.25"/>
+        <collision.action value="warn"/>
+        <collision.check-junctions value="true"/>
+        <collision.mingap-factor value="0"/>
+    </processing>
+
+    <traci_server>
+        <remote-port value="54449"/>
+    </traci_server>
+
+    <gui_only>
+        <gui-settings-file value="D:\桌面\sumo_random\suzhou\osm.view.xml"/>
+        <delay value="100"/>
+    </gui_only>
+
+</sumoConfiguration>

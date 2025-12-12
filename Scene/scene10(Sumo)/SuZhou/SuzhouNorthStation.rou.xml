@@ -1,0 +1,77 @@
+<routes>
+      <!-- 南北路线 -->
+      <route id="route_north_to_south" edges="1 0"/>
+      <route id="route_south_to_north" edges="-0 -1"/>
+      <route id="route_north_to_east" edges="1 4"/>
+      <route id="route_north_to_west" edges="1 -5#0 -5#1 -5#2 -5#3 -7#0 -7#1 -9#0 -9#1 -9#2"/>
+
+      <route id="route_south_to_east" edges="-0 4"/>
+      <route id="route_south_to_west" edges="-0 -5#0 -5#1 -5#2 -5#3 -7#0 -7#1 -9#0 -9#1 -9#2"/>
+
+      <route id="south_to_south" edges="-21 7#1 7#0 2"/>
+      <route id="south_to_west1" edges="-21 7#1 7#0 5#3 5#2 5#1 5#0 4"/>
+      <route id="south_to_west2" edges="-2 5#3 5#2 5#1 5#0 4"/>
+      <route id="west_to_south1" edges="9#2 9#1 9#0 21"/>
+      <route id="west_to_south2" edges="9#2 9#1 9#0 7#1 7#0 2"/>
+
+
+      <!-- 东西路线 -->
+      <route id="route_east_to_west" edges="-4 -5#0 -5#1 -5#2 -5#3 -7#0 -7#1 -9#0 -9#1 -9#2"/>
+      <route id="route_east_to_north" edges="-4 -1"/>
+      <route id="route_east_to_south" edges="-4 0"/>
+      <route id="route_west_to_north" edges="9#2 9#1 9#0 7#1 7#0 5#3 5#2 5#1 5#0 -1"/>
+      <route id="route_west_to_south" edges="9#2 9#1 9#0 7#1 7#0 5#3 5#2 5#1 5#0 0"/>
+      <route id="route_west_to_east" edges="9#2 9#1 9#0 7#1 7#0 5#3 5#2 5#1 5#0 4"/>
+
+      <route id="route_emergency1" edges="9#2 9#1 9#0 7#1 7#0 5#3 5#2 5#1 5#0 4"/>
+
+      <route id="route_emergency2" edges="-4 -5#0 -5#1 -5#2 -5#3 -7#0 -7#1 -9#0 -9#1 -9#2"/>
+      <!-- 紧急车辆 -->
+      <flow id="emergency1" type="vehicle.dodge.charger_police" route="route_emergency1" 
+          begin="0" end="3600" period="10" departLane="best" departSpeed="max">
+          <param key="bluelight.active" value="true"/>
+          <param key="siren.active" value="true"/>
+      </flow>
+
+      <flow id="emergency2" type="vehicle.dodge.charger_police" route="route_emergency2" 
+          begin="0" end="3600" period="20" departLane="best" departSpeed="max">
+          <param key="bluelight.active" value="true"/>
+          <param key="siren.active" value="true"/>
+      </flow>
+
+      <!-- 南北车流 -->
+
+      <flow id="flow_north_south_car" type="vehicle.audi.a2" route="route_north_to_south" 
+          begin="0" end="3600" probability="0.03" departLane="random"  departSpeed="max"/>
+
+      <flow id="flow_south_north_car" type="vehicle.audi.a2" route="route_south_to_north" 
+          begin="0" end="3600" probability="0.03" departLane="random"  departSpeed="max"/>
+
+      <flow id="flow_south_to_east" type="vehicle.audi.a2" route="route_south_to_east" 
+          begin="0" end="3600" probability="0.02" departLane="random"  departSpeed="max"/>
+      <flow id="flow_north_to_west" type="vehicle.audi.a2" route="route_north_to_west" 
+          begin="0" end="3600" probability="0.02" departLane="random"  departSpeed="max"/>
+
+    
+    <!-- 东西车流 -->
+      <flow id="flow_east_to_west" type="vehicle.audi.a2" route="route_east_to_west" 
+          begin="0" end="3600" probability="0.01" departLane="random"  departSpeed="max"/>
+
+      <flow id="flow_east_to_south" type="vehicle.audi.a2" route="route_east_to_south" 
+          begin="0" end="3600" probability="0.01" departLane="random"  departSpeed="max"/>
+
+      <flow id="flow_west_to_east" type="vehicle.audi.a2" route="route_west_to_east" 
+          begin="0" end="3600" probability="0.01" departLane="random"  departSpeed="max"/>
+
+
+<!--前两个插入路口的车-->
+
+
+<!--激进行为的车-->
+
+      <flow id="flow_north_south_truck" type="vehicle.carlamotors.carlacola" route="route_north_to_south" 
+          begin="0" end="3600" period="12" departLane="best"  departSpeed="max"/>
+      <flow id="flow_south_north_truck" type="vehicle.carlamotors.carlacola" route="route_south_to_north" 
+          begin="0" end="3600" period="12" departLane="best"  departSpeed="max"/>
+
+</routes>

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    
+    <vType id="vehicle.carlamotors.carlacola"
+           length="5.1992292404174805" width="2.6150190830230713" height="2.4768505096435547"
+           carFollowModel="Krauss"
+           accel="1.0" 
+           decel="4.0"
+           sigma="0"
+           tau="1.5"
+
+           minGap="3.0" 
+           maxSpeed="35" 
+           guiShape="truck"
+           vClass="truck"/>
+
+<!--5.1992292404174805
+    <vType id="vehicle.jeep.wrangler_rubicon" carFollowModel="Krauss" accel="4" decel="4.5" sigma="0.7" tau="2" length="5.0" minGap="3" maxSpeed="30" guiShape="passenger"
+           laneChangeModel="SL2015"
+           lcStrategic="20"
+           lcAssertive="20"
+           lcImpatience="10"
+           lcSpeedGain="5"
+           lcCooperative="-1"
+           lcKeepRight="0">
+    </vType>
+
+-->
+    <vType id="vehicle.jeep.wrangler_rubicon" carFollowModel="Krauss" accel="4" decel="4.5" sigma="0.7" tau="0.01" length="5.0" minGap="0.5" maxSpeed="30" guiShape="passenger"
+           laneChangeModel="SL2015"
+           lcStrategic="1"
+           lcAssertive="1000"
+           lcSpeedGain="5"
+           lcKeepRight="0">
+    </vType>
+
+    <route edges="-2 -8" id="highway_route"/>
+
+
+    <vehicle id="lead_truck_01" type="vehicle.carlamotors.carlacola" route="highway_route" depart="10" departLane="1" departPos="100" departSpeed="28" />
+    <vehicle id="subject_car_01" type="vehicle.jeep.wrangler_rubicon" route="highway_route" depart="10" departLane="1" departPos="60" departSpeed="28"/>
+
+
+  <!--
+    <vehicle id="subject_car_02" type="vehicle.audi.a2" route="highway_route" depart="10" departLane="2" departPos="60" departSpeed="28"/>
+-->
+
+    <!--
+    <vehicle id="lead_truck_01" type="vehicle.jeep.wrangler_rubicon" route="highway_route" depart="15" departLane="3" departPos="110" departSpeed="28" />
+    <vehicle id="subject_car_01" type="vehicle.jeep.wrangler_rubicon" route="highway_route" depart="15" departLane="1" departPos="95" departSpeed="28"/>
+    <vehicle id="subject_car_02" type="vehicle.jeep.wrangler_rubicon" route="highway_route" depart="15" departLane="3" departPos="80" departSpeed="28"/>
+    <vehicle id="subject_car_03" type="vehicle.jeep.wrangler_rubicon" route="highway_route" depart="15" departLane="1" departPos="75" departSpeed="28"/>
+    -->
+
+
+    <!-- <vehicle id="lead_truck_02" type="vehicle.mitsubishi.fusorosa" route="highway_route" depart="0" departLane="2" departPos="75" departSpeed="28"/> -->
+
+</routes>

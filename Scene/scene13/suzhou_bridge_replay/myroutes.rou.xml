@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<routes>
+
+    <!-- 激进 vType -->
+<vType id="aggressive"
+       accel="4.0"
+       decel="2.0"
+       emergencyDecel="2.5"
+       maxSpeed="35"
+       speedFactor="1.8"
+       speedDev="0.1"
+       tau="0.5"
+minGap="0"
+       lcCooperative="-1"
+       lcPushy="1"
+       impatience="1"
+       jmIgnoreFoeProb="1"
+       jmDriveAfterRedTime="0"
+       carFollowModel="IDM"/>
+
+    <!-- =========   route 定义 ========= -->
+    <route id="route1" edges="17#0 15#1 15#0"/>
+    <route id="route2" edges="-15#0 -15#1 -17#0"/>
+    <route id="route3" edges="-21 -17#0 -17#1 -17#2"/>
+    <route id="route4" edges="17#0 21 -13"/>
+    <route id="route6" edges="-21 -22#0 -22#1 -22#2 -22#3 -22#4 -9 -0#0 -0#1 -0#2 -0#3 4"/>
+    <route id="route7" edges="17#1 17#0 -22#0 -22#1 -22#2 -22#3 -22#4 -9 -0#0 -0#1 -0#2 -0#3 -5#0"/>
+    <route id="route8" edges="-4 0#3 0#2 0#1 0#0 9 22#4 22#3 22#2 22#1 22#0 21"/>
+    <route id="route9" edges="-4 0#3 0#2 0#1 0#0 9 22#4 22#3 22#2 22#1 22#0 -17#0 -17#1"/>
+    <route id="route10" edges="-15#0 -15#1 -22#0 -22#1 -22#2 -22#3 -22#4 -9 -0#0 -0#1 -0#2 -0#3 -5#0"/>
+
+</routes>

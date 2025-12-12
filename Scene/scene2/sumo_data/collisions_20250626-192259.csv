@@ -1,0 +1,13 @@
+timestamp,collision_id,vehicle1,vehicle2,collision_type
+104.85,collision_0,routeFlow_1.15,routeFlow_1.14,collision
+104.95,collision_5,routeFlow_7.22,routeFlow_6.21,collision
+105.0,collision_8,routeFlow_1.14,routeFlow_1.15,collision
+105.2,collision_24,routeFlow_6.21,routeFlow_7.22,collision
+105.2,collision_25,routeFlow_7.17,routeFlow_6.15,collision
+105.3,collision_33,routeFlow_6.6,routeFlow_6.3,collision
+105.3,collision_35,routeFlow_9.1,routeFlow_7.11,collision
+105.35,collision_40,routeFlow_6.15,routeFlow_7.17,collision
+105.65,collision_73,routeFlow_7.11,routeFlow_9.1,collision
+105.95,collision_96,routeFlow_6.3,routeFlow_6.6,collision
+111.6,collision_132,routeFlow_0.7,routeFlow_0.5,collision
+113.4,collision_144,routeFlow_0.20,routeFlow_1.20,collision

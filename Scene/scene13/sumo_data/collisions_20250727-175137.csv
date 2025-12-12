@@ -1,0 +1,6 @@
+timestamp,collision_id,vehicle1,vehicle2,collision_type
+27.5,collision_0,agg_6,flow_south_east_right.1,collision
+214.3,collision_12,flow_south_east_right.28,flow_north_east_right.14,collision
+272.8,collision_16,flow_south_east_right.33,flow_north_east_right.22,collision
+274.1,collision_21,flow_south_east_right.33,flow_north_east_right.21,collision
+276.2,collision_28,flow_south_east_right.34,flow_north_east_right.22,collision

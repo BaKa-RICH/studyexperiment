@@ -1,0 +1,24 @@
+<configuration>
+    <input>
+        <!-- 路网文件 -->
+        <net-file value="road.net.xml"/>
+        <!-- 车辆路线文件 -->
+        <route-files value="carlavtypes.rou.xml,sumo.rou1.xml"/>
+    </input>
+    <time>
+        <!-- 仿真开始和结束时间 -->
+        <begin value="0"/>
+        <end value="100000000"/>
+    </time>
+    <gui_only>
+        <gui-settings-file value="osm.view.xml"/>
+    </gui_only>
+    <processing>
+        <collision.mingap-factor value="0"/>
+        <collision.action value="warn"/>
+        <amitran-output value="filename.out.xml"/>
+    </processing>
+    <viewsettings>
+        <viewport zoom="150.0" x="500.0" y="500.0" angle="45.0"/>
+    </viewsettings>
+</configuration>
