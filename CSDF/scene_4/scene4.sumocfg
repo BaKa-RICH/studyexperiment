@@ -1,0 +1,28 @@
+<configuration>
+    <input>
+        <!-- 路网文件 -->
+        <net-file value="road.net.xml"/>
+        <!-- 车辆路线文件 -->
+        <route-files value="scene4.rou.xml"/>
+    </input>
+
+    <time>
+        <!-- 仿真开始和结束时间 -->
+        <begin value="0"/>
+        <end value="100000000"/>
+        <step-length value="0.05"/>
+
+    </time>
+
+    <gui_only>
+        <gui-settings-file value="osm.view.xml"/>
+    </gui_only>
+
+
+    <processing>
+        <collision.mingap-factor value="0"/>
+        <collision.action value="none"/>
+        <lateral-resolution value="0.25"/>
+    </processing>
+
+</configuration>
