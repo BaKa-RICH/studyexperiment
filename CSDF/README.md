@@ -16,3 +16,16 @@
 没有与CARLA联合仿真
 
 直接运行main.py
+
+#### 纯 SUMO 批量跑并导出 CSV
+
+`CSDF/batch_run.py` 会运行 `scene_4/scene4.sumocfg`，在检测到风险（TTC 触发）后执行 CSDF 的行为规划与轨迹规划，并导出：
+- `vehicle_trace_*.csv`: 每个仿真步所有车辆的 (x, y, speed, lane_id, route_id, ...)
+- `collisions_*.csv`: SUMO 报告的碰撞事件
+
+默认输出目录：`CSDF/sumo_data/`
+
+示例（无 GUI，跑 30 秒仿真）：
+```bash
+UV_CACHE_DIR=/tmp/uv-cache SUMO_GUI=0 uv run python -m CSDF.batch_run --duration-s 30
+```

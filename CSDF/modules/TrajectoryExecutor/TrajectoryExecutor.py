@@ -101,7 +101,7 @@ class TrajectoryExecutor:
             traci.vehicle.moveToXY(
                 vehID=element_id,
                 edgeID="",  # 空字符串表示自动选择edge
-                laneIndex=-1,  # -1表示自动选择lane
+                lane=-1,  # -1表示自动选择lane
                 x=target_point.location[0],
                 y=target_point.location[1],
                 angle=target_point.heading,  # 假设TrajectoryPoint有heading属性

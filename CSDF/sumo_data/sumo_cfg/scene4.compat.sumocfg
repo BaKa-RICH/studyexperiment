@@ -1,0 +1,23 @@
+<configuration>
+    <input>
+        
+        <net-file value="/home/liangyunxuan/src/Sumo-Carla-simulation-for-Vehicle-Road-Cloud-Integeration/CSDF/sumo_data/sumo_cfg/road.net.compat.xml" />
+        
+        <route-files value="/home/liangyunxuan/src/Sumo-Carla-simulation-for-Vehicle-Road-Cloud-Integeration/CSDF/scene_4/scene4.rou.xml" />
+    </input>
+
+    <time>
+        
+        <begin value="0" />
+        <end value="100000000" />
+        <step-length value="0.05" />
+
+    </time>
+
+    <processing>
+        <collision.mingap-factor value="0" />
+        <collision.action value="none" />
+        <lateral-resolution value="0.25" />
+    </processing>
+
+</configuration>

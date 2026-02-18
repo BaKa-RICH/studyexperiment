@@ -7,8 +7,8 @@
 <details>
 <summary>技术栈</summary>
 
-- Python 3.10
-- Carla 0.9.15 (模拟环境)
+- Python 3.12
+- CARLA (模拟环境, Python API 需要按平台单独安装)
 - SUMO (交通仿真、控制)
 - 依赖管理: uv
 - git
@@ -19,6 +19,11 @@
 </details>
 
 ## 环境配置
+
+## 文档
+
+- 纯 SUMO 路线：`docs/OVERVIEW_SUMO.md`、`docs/RUNBOOK_SUMO.md`、`docs/CSDF.md`
+- 过程记录：`docs/WORKLOG_2026-02-17.md`
 
 ### 安装 uv
 
@@ -39,6 +44,8 @@ uv sync
 # 同步开发依赖
 uv sync --dev
 ```
+
+> 说明: CARLA 的 Python API 不随 `uv sync` 自动安装, 因为它通常需要从对应 CARLA 发行版里拿到匹配平台/版本的 wheel 并手动安装。
 
 **注意**: 如果需要使用 tuna 镜像请添加 `--default-index` 参数, 例如:
 
@@ -95,4 +102,3 @@ Sumo中地图为.net.xml文件， .rou.xml文件为交通流文件, 其中定义
 3. 重规划功能（针对已经规划好轨迹的车辆）
 4. 算法的求解效率和扩展性
 5. 当前代码中只涉及规划部分，决策信息是手动输入的，决策方法需要自行实现
-

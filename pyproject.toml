@@ -6,38 +6,12 @@ description = '自主式交通系统预警与轨迹规划'
 readme = 'README.md'
 requires-python = '~=3.12.0'
 dependencies = [
-    "arcade>=3.0",
-    "bidict>=0.23.1",
-    "carla==0.9.15",
-    "casadi>=3.7.1",
-    "einops>=0.8.1",
-    "google-generativeai>=0.8.4",
-    "imageio[ffmpeg]>=2.37.0",
-    "ipykernel>=6.29.5",
-    "ipywidgets>=8.1.7",
-    "loguru>=0.7.3",
     "lxml>=5.4.0",
     "matplotlib>=3.10.1",
     "numpy>=2.2.4",
-    "opencv-python>=4.11.0.86",
-    "orjson>=3.10.16",
-    "pandas>=2.3.1",
-    "pillow>=11.0.0",
-    "pydantic>=2.11.7",
-    "python-dotenv>=1.1.0",
-    "pyyaml>=6.0.2",
-    "rich>=14.0.0",
-    "rustworkx>=0.16.0",
-    "scikit-image>=0.25.2",
     "scipy>=1.15.3",
-    "setuptools>=78.1.0",
     "sumolib>=1.22.0",
-    "torch>=2.7.0",
-    "torchaudio>=2.7.0",
-    "torchvision>=0.22.0",
     "traci>=1.22.0",
-    "typer>=0.15.2",
-    "types-lxml>=2025.3.30",
 ]
 
 [dependency-groups]
@@ -48,6 +22,33 @@ dev = [
     "pytest>=8.3.5",
     "ruff>=0.11.3",
     "viztracer>=1.0.4",
+]
+full = [
+    "arcade>=3.0",
+    "bidict>=0.23.1",
+    "casadi>=3.7.1",
+    "einops>=0.8.1",
+    "google-generativeai>=0.8.4",
+    "imageio[ffmpeg]>=2.37.0",
+    "ipykernel>=6.29.5",
+    "ipywidgets>=8.1.7",
+    "loguru>=0.7.3",
+    "opencv-python>=4.11.0.86",
+    "orjson>=3.10.16",
+    "pandas>=2.3.1",
+    "pillow>=11.0.0",
+    "pydantic>=2.11.7",
+    "python-dotenv>=1.1.0",
+    "pyyaml>=6.0.2",
+    "rich>=14.0.0",
+    "rustworkx>=0.16.0",
+    "scikit-image>=0.25.2",
+    "setuptools>=78.1.0",
+    "torch>=2.7.0",
+    "torchaudio>=2.7.0",
+    "torchvision>=0.22.0",
+    "typer>=0.15.2",
+    "types-lxml>=2025.3.30",
 ]
 
 [project.scripts]
@@ -91,7 +92,6 @@ torch = [
 torchvision = [
     { index = "pytorch-cu126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
-carla = { path = "assets/carla-0.10.0-cp312-cp312-win_amd64.whl" }
 
 [tool.ruff]
 src = ['src']
