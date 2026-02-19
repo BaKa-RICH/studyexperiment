@@ -1,0 +1,9 @@
+<routes>
+  <vType id="cav" accel="2.6" decel="4.5" length="5.0" minGap="2.5" tau="1.0" maxSpeed="25" />
+
+  <route id="main_route" edges="main_h1 main_h2 main_h3 main_h4" />
+  <route id="ramp_route" edges="ramp_h5 ramp_h3 main_h4" />
+
+  <flow id="flow_main" type="cav" route="main_route" begin="0" end="300" vehsPerHour="600" departSpeed="max" />
+  <flow id="flow_ramp" type="cav" route="ramp_route" begin="0" end="300" vehsPerHour="300" departSpeed="max" />
+</routes>

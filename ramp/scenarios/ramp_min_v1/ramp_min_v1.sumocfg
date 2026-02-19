@@ -1,0 +1,9 @@
+<configuration>
+  <input>
+    <net-file value="ramp_min_v1.net.xml"/>
+    <route-files value="ramp_min_v1.rou.xml"/>
+  </input>
+  <time>
+    <step-length value="0.1"/>
+  </time>
+</configuration>

@@ -1,0 +1,9 @@
+<nodes>
+  <node id="n_main_0" x="0" y="0" type="priority"/>
+  <node id="n_main_1" x="200" y="0" type="priority"/>
+  <node id="n_main_2" x="500" y="0" type="priority"/>
+  <node id="n_merge" x="800" y="0" type="priority"/>
+  <node id="n_main_3" x="1000" y="0" type="priority"/>
+  <node id="n_ramp_0" x="500" y="-350" type="priority"/>
+  <node id="n_ramp_1" x="500" y="-50" type="priority"/>
+</nodes>
