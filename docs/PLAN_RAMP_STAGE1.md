@@ -181,9 +181,11 @@ Stage 1 先用 1 个 vType：`cav`（参数先朴素，重点是稳定）
     - 车辆进入 `main_h4` 后不再出现在控制区 trace（或 `D_to_merge` 变为 0 并停止记录）
 
 - [ ] TODO 6.2：实现 `control_zone_trace.csv` 写入（每步写控制区内车辆）
-  - 字段建议（Stage 1 固定）：`time,veh_id,stream,edge_id,lane_id,lane_pos,D_to_merge,speed,accel`
+  - 字段建议（Stage 1 固定）：`time,veh_id,stream,edge_id,lane_id,lane_pos,D_to_merge,speed,accel,v_des`
   - 验证点：
-    - 运行 10s 后文件存在且行数 > 0
+    - 文件存在且表头存在
+    - 默认参数建议用 `duration >= 60s` 再检查行数 > 0（`control_zone_length_m=150` 时 10s 可能尚未进入控制区）
+    - 若只做 10s 写出能力烟测，可临时设置更大控制区（例如 `--control-zone-length-m 1000`）再检查行数 > 0
     - 表头存在且字段齐全
 
 #### 6.2 collisions.csv（碰撞事件）
@@ -232,6 +234,7 @@ Stage 1 指标建议（先稳定再加）：
    - 第 1 辆：`target = max(natural_eta, now + min_gap)`
    - 后续：`target_i = max(natural_eta_i, target_{i-1} + gap_s)`
    - Stage 1 的 `gap_s` 先用常数（例如 1.5s），不要引入 `delta_1/delta_2`（那是 Stage 2/DP 的内容）
+   - Stage 1 实际落地口径：`target_cross_time` 在“进入控制区时”一次分配并固定，不做每步重分配
 4. 执行层：每步用 `setSpeed` 追踪 `target_cross_time`
 
 - [ ] TODO 8.1：实现 FIFO passing order（按进入控制区时间排序）
@@ -278,6 +281,49 @@ Stage 1 指标建议（先稳定再加）：
 
 ---
 
+## Stage 1 执行记录（2026-02-20，供 Stage 2 参考）
+
+### A) 本轮已完成范围（实现与验证）
+1. Step 1-8 已完成并通过对应验证点。
+2. Step 9 不作为新的开发阻塞项；本轮已完成等价覆盖（`no_control/fifo` 均跑通、输出齐全、同 seed 对比完成）。
+
+### B) 已冻结的 Stage 1 基线口径
+1. `no_control`：不对车辆做控制，仅记录输出。
+2. `fifo`：保持“进入控制区即入队”的强约束基线。
+3. `fifo` 控制范围：控制区内所有车辆统一排队（不区分主线/匝道）。
+4. `fifo` 启用方式：持续启用（进入控制区即受控）。
+5. `fifo` 执行方式：继续双向速度跟踪（`setSpeed`，可加速也可减速）。
+6. `fifo` 目标时刻：`target_cross_time` 在车辆进入控制区时一次分配并固定。
+
+### C) 输出文件与字段（当前实现）
+1. `control_zone_trace.csv`：`time,veh_id,stream,edge_id,lane_id,lane_pos,D_to_merge,speed,accel,v_des`
+2. `collisions.csv`：碰撞事件逐步记录（0 碰撞也有表头）
+3. `metrics.json`：至少包含 `merge_success_rate,avg_delay_at_merge_s,throughput_veh_per_h,collision_count,stop_count`
+4. `config.json`：记录本次运行参数
+5. `plans.csv`：FIFO 调度日志（`entry_rank/order_index/natural_eta/target_cross_time/gap_from_prev/v_des`）
+
+### D) 关键统计口径补充
+1. `merge_success_rate` 使用“已评估车辆集合”：从进入控制区车辆中剔除仿真结束时仍在控制区的 `pending_unfinished`，避免固定时长截断造成虚假失败。
+2. `throughput_veh_per_h` 口径：`crossed_merge_count / duration_s * 3600`。
+3. `stop_count` 口径：速度 `< 0.1 m/s` 的“停住事件次数”（进入停住状态计一次，不是累计秒）。
+
+### E) 验证快照（`duration=120s, seed=1`）
+1. `no_control`：`merge_success_rate=1.0, avg_delay_at_merge_s=6.9334, throughput_veh_per_h=540.0, stop_count=9`
+2. `fifo`：`merge_success_rate=1.0, avg_delay_at_merge_s=6.1996, throughput_veh_per_h=480.0, stop_count=12`
+3. FIFO 约束验证：`entry_rank_inconsistency=0, target_mono_bad=0, gap_bad=0`
+
+### F) GUI 与命令行注意事项
+1. `sumo-gui` 若加 `--start` 且无 `--delay`，会快速跑完，看起来像“刚打开就结束”。
+2. GUI 可视化建议：`sumo-gui -c ramp_min_v1.sumocfg --breakpoints 0 --delay 200`。
+3. 命令参数之间必须有空格，例如 `--no-step-log true --quit-on-end true`，不要写成 `true--quit-on-end`。
+
+### G) Stage 2 前的最小回归命令集（保留）
+1. `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy no_control --duration-s 60 --seed 1 --out-dir /tmp/ramp-stage1/reg-no-control`
+2. `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy fifo --duration-s 60 --seed 1 --fifo-gap-s 1.5 --out-dir /tmp/ramp-stage1/reg-fifo`
+3. `uv run python -c "import traci, sumolib; print('ok')"`
+
+---
+
 ## 常见问题（Stage 1 快速排查）
 
 1. 匝道车不进入下游 `main_h4`
@@ -300,4 +346,3 @@ Stage 1 指标建议（先稳定再加）：
 Stage 1 稳定后再进入 Stage 2：
 1. 把 FIFO 的常数 `gap_s` 替换为 DP/调度产生的 target time
 2. 引入 CAVSim 的 `t_min` 与 DP state space（那是 Stage 2 的工作）
-
