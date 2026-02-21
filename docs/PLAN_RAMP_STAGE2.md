@@ -221,7 +221,7 @@ DP 输出两样东西（都要能被写入 `plans.csv` 并可审计）：
 
 > 目标：先证明 DP 解法对小规模输入是“最优”的，再接入 TraCI。
 
-- [ ] TODO 2.1：实现 `dp_schedule(main_seq, ramp_seq, t_min, delta_1, delta_2)`（返回 passing order + 每车 target_cross_time）
+- [x] TODO 2.1：实现 `dp_schedule(main_seq, ramp_seq, t_min, delta_1, delta_2)`（返回 passing order + 每车 target_cross_time）
   - 强约束（必须满足）：
     - passing order 必须保持每股流内部顺序不变（不允许 swap 同流内顺序）
     - 对每辆车：`t_cross >= t_min`
@@ -231,10 +231,17 @@ DP 输出两样东西（都要能被写入 `plans.csv` 并可审计）：
     - schedule 中相邻两车满足 delta_1/delta_2 约束
     - DP 的输出能复现 CAVSim 的 `CalNextVehTime` 行为（first vehicle: `t_cross=t_min`）
 
-- [ ] TODO 2.2：实现 brute-force 枚举对照（仅用于小规模测试）
+- [x] TODO 2.2：实现 brute-force 枚举对照（仅用于小规模测试）
   - 验证点：
     - 对 `main<=3, ramp<=3`，DP 输出的 objective 与 brute-force 最优一致
     - 至少 50 组随机测试通过（固定随机种子便于复现）
+
+  - 本轮验证记录（2026-02-20）：
+    - 命令：`uv run pytest -q ramp/tests/test_dp_schedule.py`
+    - 结果：`26 passed`
+    - 覆盖说明：
+      - `test_dp_matches_bruteforce_small`：`main<=3, ramp<=3` 下每组 50 次随机样本，与 brute-force 最优 objective 一致
+      - `test_dp_schedule_legality_random_tmin`：`main=1..3, ramp=1..3` 下每组 50 次随机样本，验证 schedule 合法性、delta 约束、首车 `t_cross=t_min`
 
 > 说明：这一条是 Stage 2 的关键“可信度”来源，避免后面在 SUMO 里调半天发现 DP 写错。
 
@@ -242,7 +249,7 @@ DP 输出两样东西（都要能被写入 `plans.csv` 并可审计）：
 
 ### Step 3：接入 SUMO（新增 policy=dp），输出口径与 Stage 1 对齐
 
-- [ ] TODO 3.1：在现有 `ramp/experiments/run.py` 中新增 `--policy dp`
+- [x] TODO 3.1：在现有 `ramp/experiments/run.py` 中新增 `--policy dp`
   - 行为：
     - 每次 replan 时构建 main/ramp 两队列
     - 用当前状态计算每车 `t_min`
@@ -252,38 +259,68 @@ DP 输出两样东西（都要能被写入 `plans.csv` 并可审计）：
     - `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy dp --duration-s 60 --seed 1 --out-dir /tmp/ramp-stage2/dp` 能跑完
     - 输出目录内至少包含 `control_zone_trace.csv/collisions.csv/metrics.json/config.json/plans.csv`
 
-- [ ] TODO 3.1b：明确“dp 与 fifo 的差别只在 Scheduler”，避免把执行层差异混进来
+- [x] TODO 3.1b：明确“dp 与 fifo 的差别只在 Scheduler”，避免把执行层差异混进来
   - 约束：dp 的执行层速度跟踪（`v_des` -> `setSpeed`）要和 fifo 用同一套实现（只替换 `target_cross_time` 的来源）
   - 验证点：对同一帧/同一辆车，dp 与 fifo 计算 `v_des` 的方式一致，仅 `target_cross_time` 不同
 
-- [ ] TODO 3.2：定义 replan 触发（Stage 2 先简单，后续可优化）
+- [x] TODO 3.2：定义 replan 触发（Stage 2 先简单，后续可优化）
   - Stage 2 默认（已拍板）：**每步重算**，对齐 `step-length=0.1s`
     - 每个仿真步都重算 main/ramp 队列、`t_min` 与 `dp_schedule`
     - `target_cross_time` 允许随状态更新（不做冻结），执行层仍沿用 Stage 1 的 `v_des -> setSpeed`
   - 验证点：`plans.csv` 行数会很密集，但必须能按 `time` 分组做约束检查（同一帧内检查 delta 约束）
 
-- [ ] TODO 3.3：`plans.csv` / `plans_debug.csv`（让 dp 可审计且不冗余）
+- [x] TODO 3.3：`plans.csv` / `plans_debug.csv`（让 dp 可审计且不冗余）
   - `plans.csv`（默认）：保持与 Stage 1 一致的字段与格式（便于回归对比与解析复用）
   - `plans_debug.csv`（可选）：仅在需要时新增少量字段用于审计/排查（建议只加 `t_min,delta_used`）
   - 验证点：
     - 能从 `plans.csv`（按 `time` 分组）复算并验证 delta_1/delta_2 约束
     - 能从 `plans.csv` 看出 passing order（main/ramp 交织）
 
+  - 本轮验证记录（2026-02-21）：
+    - 回归命令（同 `seed=1`, `duration=60s`）：
+      - `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy no_control --duration-s 60 --seed 1 --out-dir /tmp/ramp-stage2/step3-no-control`
+      - `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy fifo --duration-s 60 --seed 1 --fifo-gap-s 1.5 --out-dir /tmp/ramp-stage2/step3-fifo`
+      - `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy dp --duration-s 60 --seed 1 --delta-1-s 1.5 --delta-2-s 2.0 --out-dir /tmp/ramp-stage2/step3-dp`
+    - 约束检查脚本：
+      - `uv run python -m ramp.experiments.check_plans --plans /tmp/ramp-stage2/step3-dp/plans.csv --delta-1-s 1.5 --delta-2-s 2.0`
+      - 结果：`gap_bad=0, target_mono_bad=0, duplicate_order_index_count=0`
+    - 审计补充：
+      - `fifo` 使用固定 `gap_s=1.5`，若按 `delta_1=1.5, delta_2=2.0` 检查会出现跨流 gap 违约；按 `delta_1=delta_2=1.5` 检查为 0 违约
+      - `dp` 的 `plans.csv` 可直接观察到主线/匝道交织顺序（例如 `time=56.1` 时 `ramp->main->main->ramp`）
+
 ---
 
 ### Step 4：与 Stage 1 基线对比（同 seed/同流量）
 
-- [ ] TODO 4.1：固定 3 条对比命令（同 `seed`、同 `duration`）
+- [x] TODO 4.1：固定 3 条对比命令（同 `seed`、同 `duration`）
   - `no_control`
   - `fifo`（gap_s=1.5）
   - `dp`（delta_1=1.5, delta_2=2.0）
   - 验证点：三次输出目录都齐全，`metrics.json` 可解析
 
-- [ ] TODO 4.2：对比指标（不要求 dp 一定“更好”，但必须“有差异且合理”）
+- [x] TODO 4.2：对比指标（不要求 dp 一定“更好”，但必须“有差异且合理”）
   - 验证点：
     - `metrics.json` 至少在 `avg_delay_at_merge_s/throughput_veh_per_h/stop_count` 中某些项表现出差异
     - `merge_success_rate` 不应异常掉到很低（低流量下应接近 1，注意 pending_unfinished 口径）
     - 若 dp 吞吐显著低于 fifo：优先排查 `t_min`（单位/边界保护/a_max 获取）与执行层追踪；必要时做“冻结/事件触发 replan”的对照诊断
+
+  - 本轮验证记录（2026-02-21，`duration=120s, seed=1`）：
+    - 命令：
+      - `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy no_control --duration-s 120 --seed 1 --out-dir /tmp/ramp-stage2/step4-no-control`
+      - `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy fifo --duration-s 120 --seed 1 --fifo-gap-s 1.5 --out-dir /tmp/ramp-stage2/step4-fifo`
+      - `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy dp --duration-s 120 --seed 1 --delta-1-s 1.5 --delta-2-s 2.0 --out-dir /tmp/ramp-stage2/step4-dp`
+    - 文件完整性：三组目录均包含 `control_zone_trace.csv/collisions.csv/metrics.json/config.json/plans.csv`
+    - `metrics.json` 解析：三组均可被 `uv run python -m json.tool` 正常解析
+    - 指标对比：
+      - `no_control`：`merge_success_rate=1.0, avg_delay_at_merge_s=6.9334, throughput_veh_per_h=540.0, stop_count=9`
+      - `fifo`：`merge_success_rate=1.0, avg_delay_at_merge_s=6.1996, throughput_veh_per_h=480.0, stop_count=12`
+      - `dp`：`merge_success_rate=1.0, avg_delay_at_merge_s=13.8984, throughput_veh_per_h=300.0, stop_count=14`
+    - `dp` 计划约束检查：
+      - `uv run python -m ramp.experiments.check_plans --plans /tmp/ramp-stage2/step4-dp/plans.csv --delta-1-s 1.5 --delta-2-s 2.0`
+      - 结果：`gap_bad=0, target_mono_bad=0, duplicate_order_index_count=0`
+    - 吞吐偏低诊断（按 TODO 要求执行）：
+      - 诊断命令：`dp` 改为 `delta_1=delta_2=1.5`（其余不变）得到 `throughput_veh_per_h=330.0`（高于 300.0 但仍低于 fifo 480.0）
+      - 结论：低吞吐不来自明显约束违约或 JSON/输出错误，主要与 `delta_2=2.0` 更严格间隔 + 每步重算下的保守调度有关；后续可在 Step 5 增加“冻结/事件触发重算”诊断以进一步定位
 
 ---
 
@@ -291,14 +328,32 @@ DP 输出两样东西（都要能被写入 `plans.csv` 并可审计）：
 
 > Stage 2 开始后，每次改 DP 都先跑这几条，防止把 Stage 1 回归打坏。
 
-- [ ] TODO 5.1：Smoke：`dp` 运行 20s
-  - 命令（示例）：`SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy dp --duration-s 20 --seed 1 --out-dir /tmp/ramp-stage2/smoke-dp`
+- [x] TODO 5.1：Smoke：`dp` 运行 60s
+  - 命令（示例）：`SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy dp --duration-s 60 --seed 1 --out-dir /tmp/ramp-stage2/smoke-dp-60`
   - 验证点：
     - 输出文件齐全
     - `plans.csv` 存在且有数据行
 
-- [ ] TODO 5.2：Regression：同 seed 重跑 dp 两次，关键指标不应漂太大
+- [x] TODO 5.2：Regression：同 seed 重跑 dp 两次，关键指标不应漂太大
   - 验证点：两次 `metrics.json` 的关键指标差异很小（完全相同不强求）
+
+  - 本轮验证记录（2026-02-21）：
+    - 5.1 Smoke（60s 默认）：
+      - `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy dp --duration-s 60 --seed 1 --delta-1-s 1.5 --delta-2-s 2.0 --out-dir /tmp/ramp-stage2/step5-smoke-dp-60-default`
+      - 结果：输出文件齐全（`control_zone_trace.csv/collisions.csv/metrics.json/config.json/plans.csv`）
+      - 结果：`plans.csv` 数据行为 `724`，约束检查 `gap_bad=0, target_mono_bad=0, duplicate_order_index_count=0`
+    - 单测（纯算法层）：
+      - `uv run pytest -q ramp/tests/test_dp_schedule.py`
+      - 结果：`26 passed`
+    - 5.2 Regression（同 seed 双跑）：
+      - `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy dp --duration-s 120 --seed 1 --delta-1-s 1.5 --delta-2-s 2.0 --out-dir /tmp/ramp-stage2/step5-reg-dp-a2`
+      - `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy dp --duration-s 120 --seed 1 --delta-1-s 1.5 --delta-2-s 2.0 --out-dir /tmp/ramp-stage2/step5-reg-dp-b2`
+      - 两次关键指标一致：
+        - `merge_success_rate=1.0`
+        - `avg_delay_at_merge_s=13.898385805315218`
+        - `throughput_veh_per_h=300.0`
+        - `stop_count=14`
+      - 结论：同 seed 下指标差异为 0，满足“关键指标差异很小”验证点
 
 ---
 

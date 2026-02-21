@@ -6,6 +6,9 @@ import sys
 import time
 from pathlib import Path
 
+from ramp.scheduler.arrival_time import minimum_arrival_time_at_on_ramp
+from ramp.scheduler.dp import dp_schedule
+
 
 def _ensure_sumo_tools_on_path() -> None:
     sumo_home = os.environ.get('SUMO_HOME')
@@ -103,6 +106,14 @@ def _default_out_dir(repo_root: Path, scenario: str, policy: str) -> Path:
     return repo_root / 'ramp' / 'out' / f'{scenario}_{policy}_{_timestamp()}'
 
 
+def _stream_vmax(stream: str, main_vmax_mps: float, ramp_vmax_mps: float) -> float:
+    if stream == 'main':
+        return main_vmax_mps
+    if stream == 'ramp':
+        return ramp_vmax_mps
+    return max(main_vmax_mps, ramp_vmax_mps)
+
+
 def run_experiment(
     *,
     scenario: str,
@@ -117,6 +128,8 @@ def run_experiment(
     main_vmax_mps: float,
     ramp_vmax_mps: float,
     fifo_gap_s: float,
+    delta_1_s: float,
+    delta_2_s: float,
 ) -> int:
     if duration_s <= 0:
         raise ValueError('duration-s must be > 0')
@@ -128,7 +141,9 @@ def run_experiment(
         raise ValueError('stream vmax must be > 0')
     if fifo_gap_s <= 0:
         raise ValueError('fifo-gap-s must be > 0')
-    if policy not in {'no_control', 'fifo'}:
+    if delta_1_s <= 0 or delta_2_s <= 0:
+        raise ValueError('delta_1_s and delta_2_s must be > 0')
+    if policy not in {'no_control', 'fifo', 'dp'}:
         raise ValueError(f'Unsupported policy: {policy}')
 
     _ensure_sumo_tools_on_path()
@@ -208,9 +223,9 @@ def run_experiment(
     stop_count = 0
     collision_count = 0
     active_vehicle_ids: set[str] = set()
-    fifo_entry_order: list[str] = []
-    fifo_entry_rank: dict[str, int] = {}
-    fifo_controlled_ids: set[str] = set()
+    entry_order: list[str] = []
+    entry_rank: dict[str, int] = {}
+    controlled_vehicle_ids: set[str] = set()
     fifo_natural_eta: dict[str, float] = {}
     fifo_target_time: dict[str, float] = {}
     fifo_last_assigned_target: float | None = None
@@ -240,7 +255,7 @@ def run_experiment(
                     collision_writer.writerow(_collision_to_row(sim_time, collision))
                     collision_count += 1
 
-                for veh_id in active_vehicle_ids:
+                for veh_id in sorted(active_vehicle_ids):
                     route_edges = tuple(traci.vehicle.getRoute(veh_id))
                     stream = _stream_from_route(route_edges)
                     road_id = traci.vehicle.getRoadID(veh_id)
@@ -257,20 +272,15 @@ def run_experiment(
 
                     if veh_id not in entered_control:
                         entered_control.add(veh_id)
+                        entry_order.append(veh_id)
+                        entry_rank[veh_id] = len(entry_order)
                         entry_info[veh_id] = {
                             't_entry': sim_time,
                             'd_entry': d_to_merge,
                             'stream': stream,
                         }
                         if policy == 'fifo':
-                            fifo_entry_order.append(veh_id)
-                            fifo_entry_rank[veh_id] = len(fifo_entry_order)
-                            if stream == 'main':
-                                stream_vmax = main_vmax_mps
-                            elif stream == 'ramp':
-                                stream_vmax = ramp_vmax_mps
-                            else:
-                                stream_vmax = max(main_vmax_mps, ramp_vmax_mps)
+                            stream_vmax = _stream_vmax(stream, main_vmax_mps, ramp_vmax_mps)
                             natural_eta_at_entry = sim_time + d_to_merge / stream_vmax
                             if fifo_last_assigned_target is None:
                                 target_cross_time = max(natural_eta_at_entry, sim_time + fifo_gap_s)
@@ -298,21 +308,88 @@ def run_experiment(
                         'accel': float(traci.vehicle.getAcceleration(veh_id)),
                     }
 
+                schedule_order: list[str] = []
+                schedule_target_time: dict[str, float] = {}
+                schedule_eta: dict[str, float] = {}
+
                 if policy == 'fifo':
-                    ordered_vehicles = [
+                    schedule_order = [
                         veh_id
-                        for veh_id in fifo_entry_order
+                        for veh_id in entry_order
                         if veh_id in control_zone_state and veh_id not in crossed_merge
                     ]
+                    schedule_target_time = {
+                        veh_id: fifo_target_time[veh_id] for veh_id in schedule_order
+                    }
+                    schedule_eta = {
+                        veh_id: fifo_natural_eta[veh_id] for veh_id in schedule_order
+                    }
+                elif policy == 'dp':
+                    dp_candidates = [
+                        veh_id
+                        for veh_id in control_zone_state
+                        if veh_id not in crossed_merge
+                    ]
+                    main_seq = sorted(
+                        [
+                            veh_id
+                            for veh_id in dp_candidates
+                            if str(control_zone_state[veh_id]['stream']) == 'main'
+                        ],
+                        key=lambda vehicle_id: (
+                            float(entry_info[vehicle_id]['t_entry']),
+                            vehicle_id,
+                        ),
+                    )
+                    ramp_seq = sorted(
+                        [
+                            veh_id
+                            for veh_id in dp_candidates
+                            if str(control_zone_state[veh_id]['stream']) == 'ramp'
+                        ],
+                        key=lambda vehicle_id: (
+                            float(entry_info[vehicle_id]['t_entry']),
+                            vehicle_id,
+                        ),
+                    )
+                    t_min_s: dict[str, float] = {}
+                    for veh_id in main_seq + ramp_seq:
+                        vehicle_state = control_zone_state[veh_id]
+                        stream = str(vehicle_state['stream'])
+                        d_to_merge = float(vehicle_state['d_to_merge'])
+                        speed = float(vehicle_state['speed'])
+                        accel = float(traci.vehicle.getAccel(veh_id))
+                        stream_vmax = _stream_vmax(stream, main_vmax_mps, ramp_vmax_mps)
+                        t_min_s[veh_id] = minimum_arrival_time_at_on_ramp(
+                            t_now_s=sim_time,
+                            distance_m=d_to_merge,
+                            speed_mps=speed,
+                            a_max_mps2=accel,
+                            v_max_mps=stream_vmax,
+                        )
+
+                    dp_result = dp_schedule(
+                        main_seq=main_seq,
+                        ramp_seq=ramp_seq,
+                        t_min_s=t_min_s,
+                        delta_1_s=delta_1_s,
+                        delta_2_s=delta_2_s,
+                    )
+                    schedule_order = dp_result.passing_order
+                    schedule_target_time = dict(dp_result.target_cross_time_s)
+                    # Reuse Stage 1 plans.csv field name `natural_eta`; for dp this is t_min.
+                    schedule_eta = dict(t_min_s)
+
+                if policy in {'fifo', 'dp'}:
                     prev_target: float | None = None
-                    current_controlled = set(ordered_vehicles)
-                    for order_index, veh_id in enumerate(ordered_vehicles, start=1):
+                    current_controlled = set(schedule_order)
+                    for order_index, veh_id in enumerate(schedule_order, start=1):
                         vehicle_state = control_zone_state[veh_id]
                         d_to_merge = float(vehicle_state['d_to_merge'])
                         speed = float(vehicle_state['speed'])
                         stream = str(vehicle_state['stream'])
-                        natural_eta = fifo_natural_eta[veh_id]
-                        target_cross_time = fifo_target_time[veh_id]
+                        natural_eta = schedule_eta[veh_id]
+                        target_cross_time = schedule_target_time[veh_id]
                         if prev_target is None:
                             gap_from_prev = 0.0
                         else:
@@ -321,12 +398,7 @@ def run_experiment(
 
                         time_to_target = max(target_cross_time - sim_time, step_length)
                         v_des = d_to_merge / time_to_target
-                        if stream == 'main':
-                            stream_vmax = main_vmax_mps
-                        elif stream == 'ramp':
-                            stream_vmax = ramp_vmax_mps
-                        else:
-                            stream_vmax = max(main_vmax_mps, ramp_vmax_mps)
+                        stream_vmax = _stream_vmax(stream, main_vmax_mps, ramp_vmax_mps)
                         v_des = max(0.0, min(v_des, stream_vmax))
                         traci.vehicle.setSpeed(veh_id, v_des)
                         desired_speed_by_vehicle[veh_id] = v_des
@@ -334,7 +406,7 @@ def run_experiment(
                         plan_writer.writerow(
                             {
                                 'time': sim_time,
-                                'entry_rank': fifo_entry_rank[veh_id],
+                                'entry_rank': entry_rank[veh_id],
                                 'order_index': order_index,
                                 'veh_id': veh_id,
                                 'stream': stream,
@@ -348,17 +420,17 @@ def run_experiment(
                             }
                         )
 
-                    to_release = fifo_controlled_ids - current_controlled
+                    to_release = controlled_vehicle_ids - current_controlled
                     for veh_id in to_release:
                         if veh_id in active_vehicle_ids:
                             traci.vehicle.setSpeed(veh_id, -1)
-                    fifo_controlled_ids = current_controlled
+                    controlled_vehicle_ids = current_controlled
                 else:
-                    if fifo_controlled_ids:
-                        for veh_id in fifo_controlled_ids:
+                    if controlled_vehicle_ids:
+                        for veh_id in controlled_vehicle_ids:
                             if veh_id in active_vehicle_ids:
                                 traci.vehicle.setSpeed(veh_id, -1)
-                        fifo_controlled_ids = set()
+                        controlled_vehicle_ids = set()
 
                 for veh_id, vehicle_state in control_zone_state.items():
                     trace_writer.writerow(
@@ -376,7 +448,7 @@ def run_experiment(
                         }
                     )
         finally:
-            for veh_id in fifo_controlled_ids:
+            for veh_id in controlled_vehicle_ids:
                 if veh_id in active_vehicle_ids:
                     traci.vehicle.setSpeed(veh_id, -1)
             traci.close()
@@ -430,6 +502,8 @@ def run_experiment(
         'main_vmax_mps': main_vmax_mps,
         'ramp_vmax_mps': ramp_vmax_mps,
         'fifo_gap_s': fifo_gap_s,
+        'delta_1_s': delta_1_s,
+        'delta_2_s': delta_2_s,
         'output_dir': str(out_path),
     }
     config_path.write_text(json.dumps(config, indent=2), encoding='utf-8')
@@ -455,6 +529,8 @@ def main() -> int:
     parser.add_argument('--main-vmax-mps', type=float, default=25.0)
     parser.add_argument('--ramp-vmax-mps', type=float, default=16.7)
     parser.add_argument('--fifo-gap-s', type=float, default=1.5)
+    parser.add_argument('--delta-1-s', type=float, default=1.5)
+    parser.add_argument('--delta-2-s', type=float, default=2.0)
     parser.add_argument(
         '--gui',
         action='store_true',
@@ -476,6 +552,8 @@ def main() -> int:
         main_vmax_mps=args.main_vmax_mps,
         ramp_vmax_mps=args.ramp_vmax_mps,
         fifo_gap_s=args.fifo_gap_s,
+        delta_1_s=args.delta_1_s,
+        delta_2_s=args.delta_2_s,
     )
 
 

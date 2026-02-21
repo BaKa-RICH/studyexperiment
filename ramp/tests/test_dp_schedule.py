@@ -197,3 +197,47 @@ def test_dp_matches_bruteforce_small(m_total: int, n_total: int) -> None:
             assert result.target_cross_time_s[veh] >= tmin
             pre_time_s = expected_time_s
             pre_lane = lane
+
+
+@pytest.mark.parametrize('m_total', [1, 2, 3])
+@pytest.mark.parametrize('n_total', [1, 2, 3])
+def test_dp_schedule_legality_random_tmin(m_total: int, n_total: int) -> None:
+    rng = random.Random(7)
+    delta_1_s = 1.5
+    delta_2_s = 2.0
+    main_seq = [f'm{i}' for i in range(m_total)]
+    ramp_seq = [f'r{i}' for i in range(n_total)]
+
+    for _ in range(50):
+        t_min_s: dict[str, float] = {}
+        for veh in main_seq + ramp_seq:
+            t_min_s[veh] = rng.uniform(0.0, 20.0)
+
+        result = dp_schedule(
+            main_seq=main_seq,
+            ramp_seq=ramp_seq,
+            t_min_s=t_min_s,
+            delta_1_s=delta_1_s,
+            delta_2_s=delta_2_s,
+        )
+
+        assert len(result.passing_order) == m_total + n_total
+        assert set(result.passing_order) == set(main_seq + ramp_seq)
+
+        lane_by_vehicle = {veh: 0 for veh in main_seq} | {veh: 1 for veh in ramp_seq}
+        first_vehicle = result.passing_order[0]
+        assert result.target_cross_time_s[first_vehicle] == pytest.approx(t_min_s[first_vehicle])
+
+        prev_vehicle: str | None = None
+        for vehicle in result.passing_order:
+            assert result.target_cross_time_s[vehicle] >= t_min_s[vehicle]
+            if prev_vehicle is not None:
+                prev_time_s = result.target_cross_time_s[prev_vehicle]
+                cur_time_s = result.target_cross_time_s[vehicle]
+                required_gap_s = (
+                    delta_1_s
+                    if lane_by_vehicle[prev_vehicle] == lane_by_vehicle[vehicle]
+                    else delta_2_s
+                )
+                assert cur_time_s - prev_time_s >= required_gap_s - 1e-9
+            prev_vehicle = vehicle
