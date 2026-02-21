@@ -2,6 +2,7 @@ import argparse
 import csv
 import json
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -103,7 +104,7 @@ def _collision_to_row(sim_time: float, collision) -> dict[str, str | float]:
 
 
 def _default_out_dir(repo_root: Path, scenario: str, policy: str) -> Path:
-    return repo_root / 'ramp' / 'out' / f'{scenario}_{policy}_{_timestamp()}'
+    return repo_root / 'output' / scenario / policy
 
 
 def _stream_vmax(stream: str, main_vmax_mps: float, ramp_vmax_mps: float) -> float:
@@ -154,6 +155,8 @@ def run_experiment(
     sumocfg = _resolve_sumocfg(repo_root, scenario)
     sumo_binary = _pick_sumo_binary(gui)
     out_path = Path(out_dir).resolve() if out_dir else _default_out_dir(repo_root, scenario, policy)
+    if out_path.exists():
+        shutil.rmtree(out_path)
     out_path.mkdir(parents=True, exist_ok=True)
 
     cmd = [
