@@ -527,7 +527,8 @@ def main() -> int:
     parser.add_argument('--step-length', type=float, default=0.1)
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--out-dir', default=None)
-    parser.add_argument('--control-zone-length-m', type=float, default=150.0)
+    # Default control zone is long enough to cover "speed control + merge" upstream area.
+    parser.add_argument('--control-zone-length-m', type=float, default=600.0)
     parser.add_argument('--merge-edge', default='main_h4')
     parser.add_argument('--main-vmax-mps', type=float, default=25.0)
     parser.add_argument('--ramp-vmax-mps', type=float, default=16.7)

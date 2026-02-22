@@ -44,7 +44,7 @@
 ### 2) 仿真参数（默认值）
 - `step-length = 0.1s`
 - `duration = 300s`（调试时可先跑 20~60s）
-- 控制区长度（到合流点剩余距离）：`control_zone_length_m = 150`
+- 控制区长度（到合流点剩余距离）：`control_zone_length_m = 600`
 - 重规划周期：`replan_interval_s = 0.1`（先按你要求每步重算；代码里做成参数，后续可对比 0.5）
 
 ### 3) 车流（起步低流量）
@@ -184,7 +184,7 @@ Stage 1 先用 1 个 vType：`cav`（参数先朴素，重点是稳定）
   - 字段建议（Stage 1 固定）：`time,veh_id,stream,edge_id,lane_id,lane_pos,D_to_merge,speed,accel,v_des`
   - 验证点：
     - 文件存在且表头存在
-    - 默认参数建议用 `duration >= 60s` 再检查行数 > 0（`control_zone_length_m=150` 时 10s 可能尚未进入控制区）
+    - 默认参数建议用 `duration >= 60s` 再检查行数 > 0（更稳；旧默认 `150m` 时 10s 可能尚未进入控制区）
     - 若只做 10s 写出能力烟测，可临时设置更大控制区（例如 `--control-zone-length-m 1000`）再检查行数 > 0
     - 表头存在且字段齐全
 

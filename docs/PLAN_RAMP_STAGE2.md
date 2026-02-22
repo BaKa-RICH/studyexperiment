@@ -35,7 +35,7 @@
 
 ### 2) 合流点与控制区
 - 固定合流点（冲突点）：`merge_edge = "main_h4"`（进入该 edge 视为“过合流点”）
-- 控制区定义：`D_to_merge <= control_zone_length_m`（Stage 1 默认 `150m`）
+- 控制区定义：`D_to_merge <= control_zone_length_m`（当前默认 `600m`）
 - `D_to_merge` 的实现继续沿用 Stage 1（route edges 剩余长度累加）
 
 ### 3) 时间间隔参数（来自 CAVSim）
