@@ -7,8 +7,15 @@ import sys
 import time
 from pathlib import Path
 
-from ramp.scheduler.arrival_time import minimum_arrival_time_at_on_ramp
-from ramp.scheduler.dp import dp_schedule
+from ramp.policies.dp.command_builder import build_command as build_dp_command
+from ramp.policies.dp.scheduler import DPScheduler
+from ramp.policies.fifo.command_builder import build_command as build_fifo_command
+from ramp.policies.fifo.scheduler import compute_plan as compute_fifo_plan
+from ramp.policies.no_control.command_builder import build_command as build_no_control_command
+from ramp.policies.no_control.scheduler import compute_plan as compute_no_control_plan
+from ramp.runtime.controller import Controller
+from ramp.runtime.simulation_driver import SimulationDriver
+from ramp.runtime.state_collector import StateCollector
 
 
 def _ensure_sumo_tools_on_path() -> None:
@@ -103,16 +110,21 @@ def _collision_to_row(sim_time: float, collision) -> dict[str, str | float]:
     return row
 
 
+def _percentile(values: list[float], q: float) -> float:
+    if not values:
+        return 0.0
+    if q <= 0:
+        return float(min(values))
+    if q >= 1:
+        return float(max(values))
+    sorted_vals = sorted(values)
+    idx = int(round((len(sorted_vals) - 1) * q))
+    idx = max(0, min(idx, len(sorted_vals) - 1))
+    return float(sorted_vals[idx])
+
+
 def _default_out_dir(repo_root: Path, scenario: str, policy: str) -> Path:
     return repo_root / 'output' / scenario / policy
-
-
-def _stream_vmax(stream: str, main_vmax_mps: float, ramp_vmax_mps: float) -> float:
-    if stream == 'main':
-        return main_vmax_mps
-    if stream == 'ramp':
-        return ramp_vmax_mps
-    return max(main_vmax_mps, ramp_vmax_mps)
 
 
 def run_experiment(
@@ -131,6 +143,7 @@ def run_experiment(
     fifo_gap_s: float,
     delta_1_s: float,
     delta_2_s: float,
+    dp_replan_interval_s: float,
 ) -> int:
     if duration_s <= 0:
         raise ValueError('duration-s must be > 0')
@@ -144,6 +157,8 @@ def run_experiment(
         raise ValueError('fifo-gap-s must be > 0')
     if delta_1_s <= 0 or delta_2_s <= 0:
         raise ValueError('delta_1_s and delta_2_s must be > 0')
+    if dp_replan_interval_s <= 0:
+        raise ValueError('dp-replan-interval-s must be > 0')
     if policy not in {'no_control', 'fifo', 'dp'}:
         raise ValueError(f'Unsupported policy: {policy}')
 
@@ -197,10 +212,21 @@ def run_experiment(
         'lane',
         'pos',
     ]
+    command_fields = [
+        'time',
+        'veh_id',
+        'stream',
+        'd_to_merge_m',
+        'v_cmd_mps',
+        'release_flag',
+    ]
+    event_fields = ['time', 'event', 'veh_id', 'detail']
 
     trace_path = out_path / 'control_zone_trace.csv'
     collisions_path = out_path / 'collisions.csv'
     plans_path = out_path / 'plans.csv'
+    commands_path = out_path / 'commands.csv'
+    events_path = out_path / 'events.csv'
     metrics_path = out_path / 'metrics.json'
     config_path = out_path / 'config.json'
     plan_fields = [
@@ -218,38 +244,54 @@ def run_experiment(
         'v_des',
     ]
 
-    entered_control: set[str] = set()
-    crossed_merge: set[str] = set()
-    entry_info: dict[str, dict[str, float | str]] = {}
-    cross_time: dict[str, float] = {}
-    prev_stopped: dict[str, bool] = {}
-    stop_count = 0
     collision_count = 0
     active_vehicle_ids: set[str] = set()
-    entry_order: list[str] = []
-    entry_rank: dict[str, int] = {}
-    controlled_vehicle_ids: set[str] = set()
-    fifo_natural_eta: dict[str, float] = {}
-    fifo_target_time: dict[str, float] = {}
-    fifo_last_assigned_target: float | None = None
+    prev_control_zone_ids: set[str] = set()
+    prev_crossed_merge: set[str] = set()
+    plan_snapshots: list[tuple[float, list[str], dict[str, float]]] = []
+    speed_tracking_abs_errors: list[float] = []
+    state_collector = StateCollector(
+        control_zone_length_m=control_zone_length_m,
+        merge_edge=merge_edge,
+        policy=policy,
+        main_vmax_mps=main_vmax_mps,
+        ramp_vmax_mps=ramp_vmax_mps,
+        fifo_gap_s=fifo_gap_s,
+    )
+    dp_scheduler: DPScheduler | None = None
+    if policy == 'dp':
+        dp_scheduler = DPScheduler(
+            delta_1_s=delta_1_s,
+            delta_2_s=delta_2_s,
+            main_vmax_mps=main_vmax_mps,
+            ramp_vmax_mps=ramp_vmax_mps,
+            replan_interval_s=dp_replan_interval_s,
+        )
 
-    traci.start(cmd)
+    sim_driver = SimulationDriver(traci=traci, cmd=cmd)
+    controller = Controller(traci=traci)
+    sim_driver.start()
     with trace_path.open('w', newline='', encoding='utf-8') as trace_fp, collisions_path.open(
         'w', newline='', encoding='utf-8'
-    ) as collision_fp, plans_path.open('w', newline='', encoding='utf-8') as plan_fp:
+    ) as collision_fp, plans_path.open('w', newline='', encoding='utf-8') as plan_fp, commands_path.open(
+        'w', newline='', encoding='utf-8'
+    ) as command_fp, events_path.open('w', newline='', encoding='utf-8') as event_fp:
         trace_writer = csv.DictWriter(trace_fp, fieldnames=trace_fields, lineterminator='\n')
         collision_writer = csv.DictWriter(
             collision_fp, fieldnames=collision_fields, lineterminator='\n'
         )
         plan_writer = csv.DictWriter(plan_fp, fieldnames=plan_fields, lineterminator='\n')
+        command_writer = csv.DictWriter(command_fp, fieldnames=command_fields, lineterminator='\n')
+        event_writer = csv.DictWriter(event_fp, fieldnames=event_fields, lineterminator='\n')
         trace_writer.writeheader()
         collision_writer.writeheader()
         plan_writer.writeheader()
+        command_writer.writeheader()
+        event_writer.writeheader()
 
         try:
             for _ in range(max_steps):
-                traci.simulationStep()
-                sim_time = float(traci.simulation.getTime())
+                sim_time = sim_driver.step()
                 active_vehicle_ids = set(traci.vehicle.getIDList())
                 control_zone_state: dict[str, dict[str, float | str]] = {}
                 desired_speed_by_vehicle: dict[str, float] = {}
@@ -258,134 +300,107 @@ def run_experiment(
                     collision_writer.writerow(_collision_to_row(sim_time, collision))
                     collision_count += 1
 
-                for veh_id in sorted(active_vehicle_ids):
-                    route_edges = tuple(traci.vehicle.getRoute(veh_id))
-                    stream = _stream_from_route(route_edges)
-                    road_id = traci.vehicle.getRoadID(veh_id)
+                collected_state = state_collector.collect(sim_time=sim_time, traci=traci)
+                active_vehicle_ids = collected_state.active_vehicle_ids
+                control_zone_state = collected_state.control_zone_state
+                control_zone_ids = set(control_zone_state)
+                entered_this_step = control_zone_ids - prev_control_zone_ids
+                left_this_step = prev_control_zone_ids - control_zone_ids
+                crossed_this_step = state_collector.crossed_merge - prev_crossed_merge
 
-                    if road_id == merge_edge and veh_id not in crossed_merge:
-                        crossed_merge.add(veh_id)
-                        cross_time[veh_id] = sim_time
-
-                    d_to_merge = _distance_to_merge(veh_id, merge_edge, traci)
-                    if d_to_merge is None or d_to_merge <= 0:
-                        continue
-                    if d_to_merge > control_zone_length_m:
-                        continue
-
-                    if veh_id not in entered_control:
-                        entered_control.add(veh_id)
-                        entry_order.append(veh_id)
-                        entry_rank[veh_id] = len(entry_order)
-                        entry_info[veh_id] = {
-                            't_entry': sim_time,
-                            'd_entry': d_to_merge,
-                            'stream': stream,
+                for veh_id in sorted(entered_this_step):
+                    stream = str(state_collector.entry_info.get(veh_id, {}).get('stream', 'unknown'))
+                    event_writer.writerow(
+                        {
+                            'time': sim_time,
+                            'event': 'enter_control',
+                            'veh_id': veh_id,
+                            'detail': f'stream={stream}',
                         }
-                        if policy == 'fifo':
-                            stream_vmax = _stream_vmax(stream, main_vmax_mps, ramp_vmax_mps)
-                            natural_eta_at_entry = sim_time + d_to_merge / stream_vmax
-                            if fifo_last_assigned_target is None:
-                                target_cross_time = max(natural_eta_at_entry, sim_time + fifo_gap_s)
-                            else:
-                                target_cross_time = max(
-                                    natural_eta_at_entry, fifo_last_assigned_target + fifo_gap_s
-                                )
-                            fifo_natural_eta[veh_id] = natural_eta_at_entry
-                            fifo_target_time[veh_id] = target_cross_time
-                            fifo_last_assigned_target = target_cross_time
+                    )
+                for veh_id in sorted(crossed_this_step):
+                    event_writer.writerow(
+                        {
+                            'time': sim_time,
+                            'event': 'cross_merge',
+                            'veh_id': veh_id,
+                            'detail': f'merge_edge={merge_edge}',
+                        }
+                    )
+                for veh_id in sorted(left_this_step):
+                    stream = str(state_collector.entry_info.get(veh_id, {}).get('stream', 'unknown'))
+                    event_writer.writerow(
+                        {
+                            'time': sim_time,
+                            'event': 'leave_control',
+                            'veh_id': veh_id,
+                            'detail': f'stream={stream}',
+                        }
+                    )
 
-                    speed = float(traci.vehicle.getSpeed(veh_id))
-                    is_stopped = speed < 0.1
-                    if is_stopped and not prev_stopped.get(veh_id, False):
-                        stop_count += 1
-                    prev_stopped[veh_id] = is_stopped
-
-                    control_zone_state[veh_id] = {
-                        'stream': stream,
-                        'edge_id': road_id,
-                        'lane_id': traci.vehicle.getLaneID(veh_id),
-                        'lane_pos': float(traci.vehicle.getLanePosition(veh_id)),
-                        'd_to_merge': d_to_merge,
-                        'speed': speed,
-                        'accel': float(traci.vehicle.getAcceleration(veh_id)),
-                    }
-
-                schedule_order: list[str] = []
-                schedule_target_time: dict[str, float] = {}
-                schedule_eta: dict[str, float] = {}
-
+                plan = None
+                plan_recomputed = False
                 if policy == 'fifo':
-                    schedule_order = [
-                        veh_id
-                        for veh_id in entry_order
-                        if veh_id in control_zone_state and veh_id not in crossed_merge
-                    ]
-                    schedule_target_time = {
-                        veh_id: fifo_target_time[veh_id] for veh_id in schedule_order
-                    }
-                    schedule_eta = {
-                        veh_id: fifo_natural_eta[veh_id] for veh_id in schedule_order
-                    }
+                    plan = compute_fifo_plan(
+                        sim_time_s=sim_time,
+                        control_zone_state=control_zone_state,
+                        entry_order=state_collector.entry_order,
+                        crossed_merge=state_collector.crossed_merge,
+                        fifo_target_time=state_collector.fifo_target_time,
+                        fifo_natural_eta=state_collector.fifo_natural_eta,
+                    )
+                    plan_recomputed = bool(entered_this_step)
                 elif policy == 'dp':
-                    dp_candidates = [
-                        veh_id
-                        for veh_id in control_zone_state
-                        if veh_id not in crossed_merge
-                    ]
-                    main_seq = sorted(
-                        [
-                            veh_id
-                            for veh_id in dp_candidates
-                            if str(control_zone_state[veh_id]['stream']) == 'main'
-                        ],
-                        key=lambda vehicle_id: (
-                            float(entry_info[vehicle_id]['t_entry']),
-                            vehicle_id,
-                        ),
+                    if dp_scheduler is None:
+                        raise RuntimeError('DP scheduler is not initialized')
+                    plan = dp_scheduler.compute_plan(
+                        sim_time_s=sim_time,
+                        control_zone_state=control_zone_state,
+                        crossed_merge=state_collector.crossed_merge,
+                        entry_info=state_collector.entry_info,
+                        traci=traci,
                     )
-                    ramp_seq = sorted(
-                        [
-                            veh_id
-                            for veh_id in dp_candidates
-                            if str(control_zone_state[veh_id]['stream']) == 'ramp'
-                        ],
-                        key=lambda vehicle_id: (
-                            float(entry_info[vehicle_id]['t_entry']),
-                            vehicle_id,
-                        ),
-                    )
-                    t_min_s: dict[str, float] = {}
-                    for veh_id in main_seq + ramp_seq:
-                        vehicle_state = control_zone_state[veh_id]
-                        stream = str(vehicle_state['stream'])
-                        d_to_merge = float(vehicle_state['d_to_merge'])
-                        speed = float(vehicle_state['speed'])
-                        accel = float(traci.vehicle.getAccel(veh_id))
-                        stream_vmax = _stream_vmax(stream, main_vmax_mps, ramp_vmax_mps)
-                        t_min_s[veh_id] = minimum_arrival_time_at_on_ramp(
-                            t_now_s=sim_time,
-                            distance_m=d_to_merge,
-                            speed_mps=speed,
-                            a_max_mps2=accel,
-                            v_max_mps=stream_vmax,
-                        )
-
-                    dp_result = dp_schedule(
-                        main_seq=main_seq,
-                        ramp_seq=ramp_seq,
-                        t_min_s=t_min_s,
-                        delta_1_s=delta_1_s,
-                        delta_2_s=delta_2_s,
-                    )
-                    schedule_order = dp_result.passing_order
-                    schedule_target_time = dict(dp_result.target_cross_time_s)
-                    # Reuse Stage 1 plans.csv field name `natural_eta`; for dp this is t_min.
-                    schedule_eta = dict(t_min_s)
+                    plan_recomputed = bool(dp_scheduler.replanned_last_call)
+                else:
+                    plan = compute_no_control_plan(sim_time_s=sim_time)
 
                 if policy in {'fifo', 'dp'}:
+                    if plan is None:
+                        raise RuntimeError(f'Policy {policy} must return a Plan')
+                    schedule_order = plan.order
+                    schedule_target_time = plan.target_cross_time_s
+                    schedule_eta = plan.eta_s
+                    plan_snapshots.append(
+                        (sim_time, list(schedule_order), dict(schedule_target_time))
+                    )
+                    if plan_recomputed:
+                        event_writer.writerow(
+                            {
+                                'time': sim_time,
+                                'event': 'plan_recompute',
+                                'veh_id': '',
+                                'detail': f'policy={policy}',
+                            }
+                        )
+                    if policy == 'fifo':
+                        command = build_fifo_command(
+                            sim_time_s=sim_time,
+                            step_length_s=step_length,
+                            plan=plan,
+                            control_zone_state=control_zone_state,
+                            main_vmax_mps=main_vmax_mps,
+                            ramp_vmax_mps=ramp_vmax_mps,
+                        )
+                    else:
+                        command = build_dp_command(
+                            sim_time_s=sim_time,
+                            step_length_s=step_length,
+                            plan=plan,
+                            control_zone_state=control_zone_state,
+                            main_vmax_mps=main_vmax_mps,
+                            ramp_vmax_mps=ramp_vmax_mps,
+                        )
                     prev_target: float | None = None
-                    current_controlled = set(schedule_order)
                     for order_index, veh_id in enumerate(schedule_order, start=1):
                         vehicle_state = control_zone_state[veh_id]
                         d_to_merge = float(vehicle_state['d_to_merge'])
@@ -399,21 +414,19 @@ def run_experiment(
                             gap_from_prev = target_cross_time - prev_target
                         prev_target = target_cross_time
 
-                        time_to_target = max(target_cross_time - sim_time, step_length)
-                        v_des = d_to_merge / time_to_target
-                        stream_vmax = _stream_vmax(stream, main_vmax_mps, ramp_vmax_mps)
-                        v_des = max(0.0, min(v_des, stream_vmax))
-                        traci.vehicle.setSpeed(veh_id, v_des)
+                        v_des = float(command.set_speed_mps[veh_id])
                         desired_speed_by_vehicle[veh_id] = v_des
 
                         plan_writer.writerow(
                             {
                                 'time': sim_time,
-                                'entry_rank': entry_rank[veh_id],
+                                'entry_rank': state_collector.entry_rank[veh_id],
                                 'order_index': order_index,
                                 'veh_id': veh_id,
                                 'stream': stream,
-                                't_enter_control_zone': float(entry_info[veh_id]['t_entry']),
+                                't_enter_control_zone': float(
+                                    state_collector.entry_info[veh_id]['t_entry']
+                                ),
                                 'D_to_merge': d_to_merge,
                                 'speed': speed,
                                 'natural_eta': natural_eta,
@@ -422,18 +435,66 @@ def run_experiment(
                                 'v_des': v_des,
                             }
                         )
-
-                    to_release = controlled_vehicle_ids - current_controlled
-                    for veh_id in to_release:
-                        if veh_id in active_vehicle_ids:
-                            traci.vehicle.setSpeed(veh_id, -1)
-                    controlled_vehicle_ids = current_controlled
+                    controller_result = controller.apply(
+                        command=command, active_vehicle_ids=active_vehicle_ids
+                    )
                 else:
-                    if controlled_vehicle_ids:
-                        for veh_id in controlled_vehicle_ids:
-                            if veh_id in active_vehicle_ids:
-                                traci.vehicle.setSpeed(veh_id, -1)
-                        controlled_vehicle_ids = set()
+                    command = build_no_control_command()
+                    controller_result = controller.apply(
+                        command=command, active_vehicle_ids=active_vehicle_ids
+                    )
+
+                for veh_id in sorted(command.set_speed_mps):
+                    vehicle_state = control_zone_state.get(veh_id, {})
+                    command_writer.writerow(
+                        {
+                            'time': sim_time,
+                            'veh_id': veh_id,
+                            'stream': vehicle_state.get('stream', ''),
+                            'd_to_merge_m': vehicle_state.get('d_to_merge', ''),
+                            'v_cmd_mps': command.set_speed_mps[veh_id],
+                            'release_flag': 0,
+                        }
+                    )
+                for veh_id in sorted(controller_result.released_ids):
+                    vehicle_state = control_zone_state.get(veh_id, {})
+                    command_writer.writerow(
+                        {
+                            'time': sim_time,
+                            'veh_id': veh_id,
+                            'stream': vehicle_state.get('stream', ''),
+                            'd_to_merge_m': vehicle_state.get('d_to_merge', ''),
+                            'v_cmd_mps': '',
+                            'release_flag': 1,
+                        }
+                    )
+                for veh_id in sorted(controller_result.takeover_ids):
+                    event_writer.writerow(
+                        {
+                            'time': sim_time,
+                            'event': 'speedmode_takeover',
+                            'veh_id': veh_id,
+                            'detail': 'speed_mode=23',
+                        }
+                    )
+                for veh_id in sorted(controller_result.restored_ids):
+                    event_writer.writerow(
+                        {
+                            'time': sim_time,
+                            'event': 'speedmode_restore',
+                            'veh_id': veh_id,
+                            'detail': '',
+                        }
+                    )
+                for veh_id in sorted(controller_result.commit_ids):
+                    event_writer.writerow(
+                        {
+                            'time': sim_time,
+                            'event': 'commit_vehicle',
+                            'veh_id': veh_id,
+                            'detail': 'internal_edge=:n_merge*',
+                        }
+                    )
 
                 for veh_id, vehicle_state in control_zone_state.items():
                     trace_writer.writerow(
@@ -450,33 +511,98 @@ def run_experiment(
                             'v_des': desired_speed_by_vehicle.get(veh_id, ''),
                         }
                     )
+                for veh_id, v_des in desired_speed_by_vehicle.items():
+                    if veh_id in control_zone_state:
+                        speed_now = float(control_zone_state[veh_id]['speed'])
+                        speed_tracking_abs_errors.append(abs(speed_now - v_des))
+
+                prev_control_zone_ids = control_zone_ids
+                prev_crossed_merge = set(state_collector.crossed_merge)
         finally:
-            for veh_id in controlled_vehicle_ids:
-                if veh_id in active_vehicle_ids:
-                    traci.vehicle.setSpeed(veh_id, -1)
-            traci.close()
+            controller.release_all(active_vehicle_ids=active_vehicle_ids)
+            sim_driver.close()
 
     pending_unfinished = {
-        veh_id for veh_id in entered_control if veh_id not in cross_time and veh_id in active_vehicle_ids
+        veh_id
+        for veh_id in state_collector.entered_control
+        if veh_id not in state_collector.cross_time and veh_id in active_vehicle_ids
     }
-    evaluated_entered = entered_control - pending_unfinished
-    successful_merge = [veh_id for veh_id in evaluated_entered if veh_id in cross_time]
+    evaluated_entered = state_collector.entered_control - pending_unfinished
+    successful_merge = [
+        veh_id for veh_id in evaluated_entered if veh_id in state_collector.cross_time
+    ]
     merge_success_rate = (
         len(successful_merge) / len(evaluated_entered) if evaluated_entered else 0.0
     )
 
     delays: list[float] = []
     for veh_id in successful_merge:
-        vehicle_entry = entry_info[veh_id]
+        vehicle_entry = state_collector.entry_info[veh_id]
         stream = str(vehicle_entry['stream'])
         free_flow_speed = main_vmax_mps if stream == 'main' else ramp_vmax_mps
         t_entry = float(vehicle_entry['t_entry'])
         d_entry = float(vehicle_entry['d_entry'])
         free_flow_time = d_entry / free_flow_speed
-        delays.append(cross_time[veh_id] - (t_entry + free_flow_time))
+        delays.append(state_collector.cross_time[veh_id] - (t_entry + free_flow_time))
 
     avg_delay = sum(delays) / len(delays) if delays else 0.0
-    throughput_veh_per_h = (len(crossed_merge) / duration_s) * 3600.0
+    throughput_veh_per_h = (len(state_collector.crossed_merge) / duration_s) * 3600.0
+    speed_tracking_mae_mps = (
+        sum(speed_tracking_abs_errors) / len(speed_tracking_abs_errors)
+        if speed_tracking_abs_errors
+        else 0.0
+    )
+
+    consistency_merge_order_mismatch_count = 0
+    cross_time_errors: list[float] = []
+    if policy in {'fifo', 'dp'} and plan_snapshots:
+        actual_cross_sequence = sorted(
+            state_collector.cross_time.items(),
+            key=lambda item: (float(item[1]), item[0]),
+        )
+        for veh_id, cross_t in actual_cross_sequence:
+            latest_snapshot: tuple[float, list[str], dict[str, float]] | None = None
+            latest_with_vehicle: tuple[float, list[str], dict[str, float]] | None = None
+            for snapshot in plan_snapshots:
+                if snapshot[0] >= cross_t - 1e-9:
+                    break
+                latest_snapshot = snapshot
+                if veh_id in snapshot[2]:
+                    latest_with_vehicle = snapshot
+
+            if latest_snapshot and latest_snapshot[1]:
+                if latest_snapshot[1][0] != veh_id:
+                    consistency_merge_order_mismatch_count += 1
+
+            if latest_with_vehicle is not None:
+                cross_time_errors.append(cross_t - latest_with_vehicle[2][veh_id])
+
+    cross_time_error_mean_s = (
+        sum(abs(err) for err in cross_time_errors) / len(cross_time_errors)
+        if cross_time_errors
+        else 0.0
+    )
+    cross_time_error_p95_s = (
+        _percentile([abs(err) for err in cross_time_errors], 0.95)
+        if cross_time_errors
+        else 0.0
+    )
+
+    churn_samples: list[float] = []
+    if policy in {'fifo', 'dp'} and len(plan_snapshots) >= 2:
+        for prev_snapshot, cur_snapshot in zip(plan_snapshots, plan_snapshots[1:]):
+            prev_order = prev_snapshot[1]
+            cur_order = cur_snapshot[1]
+            prev_pos = {veh_id: idx for idx, veh_id in enumerate(prev_order)}
+            cur_pos = {veh_id: idx for idx, veh_id in enumerate(cur_order)}
+            shared = set(prev_pos) & set(cur_pos)
+            if not shared:
+                continue
+            changed = sum(1 for veh_id in shared if prev_pos[veh_id] != cur_pos[veh_id])
+            churn_samples.append(changed / len(shared))
+    consistency_plan_churn_rate = (
+        sum(churn_samples) / len(churn_samples) if churn_samples else 0.0
+    )
 
     metrics = {
         'policy_name': policy,
@@ -484,11 +610,16 @@ def run_experiment(
         'avg_delay_at_merge_s': avg_delay,
         'throughput_veh_per_h': throughput_veh_per_h,
         'collision_count': collision_count,
-        'stop_count': stop_count,
-        'entered_control_count': len(entered_control),
+        'stop_count': state_collector.stop_count,
+        'entered_control_count': len(state_collector.entered_control),
         'evaluated_entered_count': len(evaluated_entered),
         'pending_unfinished_count': len(pending_unfinished),
-        'crossed_merge_count': len(crossed_merge),
+        'crossed_merge_count': len(state_collector.crossed_merge),
+        'consistency_merge_order_mismatch_count': consistency_merge_order_mismatch_count,
+        'consistency_cross_time_error_mean_s': cross_time_error_mean_s,
+        'consistency_cross_time_error_p95_s': cross_time_error_p95_s,
+        'consistency_speed_tracking_mae_mps': speed_tracking_mae_mps,
+        'consistency_plan_churn_rate': consistency_plan_churn_rate,
     }
     metrics_path.write_text(json.dumps(metrics, indent=2), encoding='utf-8')
 
@@ -507,6 +638,7 @@ def run_experiment(
         'fifo_gap_s': fifo_gap_s,
         'delta_1_s': delta_1_s,
         'delta_2_s': delta_2_s,
+        'dp_replan_interval_s': dp_replan_interval_s,
         'output_dir': str(out_path),
     }
     config_path.write_text(json.dumps(config, indent=2), encoding='utf-8')
@@ -535,6 +667,7 @@ def main() -> int:
     parser.add_argument('--fifo-gap-s', type=float, default=1.5)
     parser.add_argument('--delta-1-s', type=float, default=1.5)
     parser.add_argument('--delta-2-s', type=float, default=2.0)
+    parser.add_argument('--dp-replan-interval-s', type=float, default=0.5)
     parser.add_argument(
         '--gui',
         action='store_true',
@@ -558,6 +691,7 @@ def main() -> int:
         fifo_gap_s=args.fifo_gap_s,
         delta_1_s=args.delta_1_s,
         delta_2_s=args.delta_2_s,
+        dp_replan_interval_s=args.dp_replan_interval_s,
     )
 
 
