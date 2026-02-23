@@ -26,13 +26,20 @@
         <lane id=":n_main_2_0_0" index="0" speed="25.00" length="0.10" shape="500.00,348.40 500.00,348.40"/>
     </edge>
     <edge id=":n_merge_0" function="internal">
-        <lane id=":n_merge_0_0" index="0" speed="20.85" length="22.46" shape="779.58,344.98 784.43,345.86 790.65,347.00 796.88,347.98 801.76,348.40"/>
+        <!-- NOTE (ramp A/B test):
+             Original speed="20.85". Raised to 25.00 to remove residual ramp disadvantage inside the merge
+             internal edge, so we can isolate whether FIFO mismatch is primarily caused by main/ramp speed
+             asymmetry vs. execution/commit behavior. -->
+        <lane id=":n_merge_0_0" index="0" speed="25.00" length="22.46" shape="779.58,344.98 784.43,345.86 790.65,347.00 796.88,347.98 801.76,348.40"/>
     </edge>
     <edge id=":n_merge_1" function="internal">
         <lane id=":n_merge_1_0" index="0" speed="25.00" length="22.46" shape="779.30,348.40 801.76,348.40"/>
     </edge>
     <edge id=":n_ramp_1_0" function="internal">
-        <lane id=":n_ramp_1_0_0" index="0" speed="3.92" length="2.28" shape="501.60,297.29 501.68,297.90 501.93,298.36 502.35,298.69 502.94,298.87"/>
+        <!-- NOTE (ramp A/B test):
+             Original speed="3.92". Raised to 25.00 so the short internal connector does not force an
+             artificial ramp speed drop right before the merge approach. -->
+        <lane id=":n_ramp_1_0_0" index="0" speed="25.00" length="2.28" shape="501.60,297.29 501.68,297.90 501.93,298.36 502.35,298.69 502.94,298.87"/>
     </edge>
 
     <edge id="main_h1" from="n_main_0" to="n_main_1" priority="2">
@@ -48,10 +55,17 @@
         <lane id="main_h4_0" index="0" speed="25.00" length="198.24" shape="801.76,348.40 1000.00,348.40"/>
     </edge>
     <edge id="ramp_h3" from="n_ramp_1" to="n_merge" priority="1">
-        <lane id="ramp_h3_0" index="0" speed="16.70" length="280.46" shape="502.94,298.87 779.58,344.98"/>
+        <!-- NOTE (ramp A/B test):
+             Original speed="16.70". Raised to 25.00 to match mainline max speed, to test whether FIFO
+             mismatch is driven by main(25) vs ramp(16.7) asymmetry rather than SUMO right-of-way (bit8)
+             or our execution/commit behavior. -->
+        <lane id="ramp_h3_0" index="0" speed="25.00" length="280.46" shape="502.94,298.87 779.58,344.98"/>
     </edge>
     <edge id="ramp_h5" from="n_ramp_0" to="n_ramp_1" priority="1">
-        <lane id="ramp_h5_0" index="0" speed="16.70" length="297.29" shape="501.60,0.00 501.60,297.29"/>
+        <!-- NOTE (ramp A/B test):
+             Original speed="16.70". Raised to 25.00 to match mainline max speed for the whole ramp
+             approach. -->
+        <lane id="ramp_h5_0" index="0" speed="25.00" length="297.29" shape="501.60,0.00 501.60,297.29"/>
     </edge>
 
     <junction id="n_main_0" type="dead_end" x="0.00" y="350.00" incLanes="" intLanes="" shape="0.00,350.00 0.00,346.80"/>

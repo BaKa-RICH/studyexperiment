@@ -36,6 +36,18 @@ def _build_edge_length_cache(route_edges: tuple[str, ...], traci) -> dict[str, f
 
 
 def _distance_to_merge(veh_id: str, merge_edge: str, traci) -> float | None:
+    # Prefer TraCI driving distance to avoid internal-edge artifacts (e.g. ":n_merge_*").
+    # Our previous implementation mixed `routeIndex` (route edge) with `lanePosition` (current lane),
+    # which breaks when SUMO places a vehicle on a junction internal edge not present in the route.
+    try:
+        dist = float(traci.vehicle.getDrivingDistance(veh_id, merge_edge, 0.0))
+        if dist < 0:
+            return None
+        return dist
+    except Exception:
+        # Fall back to a pure route-based estimate.
+        pass
+
     route_edges = tuple(traci.vehicle.getRoute(veh_id))
     if not route_edges or merge_edge not in route_edges:
         return None
@@ -144,4 +156,3 @@ class StateCollector:
             active_vehicle_ids=active_vehicle_ids,
             control_zone_state=control_zone_state,
         )
-
