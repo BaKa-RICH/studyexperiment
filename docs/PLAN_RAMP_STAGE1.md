@@ -12,13 +12,18 @@
 
 ---
 
+> 说明（2026-02-23）：Stage 1 已实现并作为基线冻结；本文件保留“实施计划”段落作为历史参考。实际验收/回归命令以 `docs/RAMP_VALIDATION.md` 为准。
+
 ## Stage 1 Definition of Done（DoD）
 
 满足以下条件即 Stage 1 完成：
 
 1. 自建场景 `ramp_min_v1` 能用 `sumo`（无 GUI）跑通 300s，不报错。
-2. `uv run python -m ramp.experiments.run ...` 能跑通 60s（或更久），输出目录里必有：
+2. `uv run python -m ramp.experiments.run ...` 能跑通（建议回归用 `duration=120s`），输出目录里至少包含：
    - `control_zone_trace.csv`（控制区车辆轨迹）
+   - `plans.csv`（每步计划快照；`no_control` 也会写表头）
+   - `commands.csv`（每步命令快照）
+   - `events.csv`（稀疏事件流）
    - `metrics.json`
    - `collisions.csv`（即使为空也要有表头）
    - `config.json`
@@ -39,13 +44,19 @@
   - 主线 Main：`main_*`
   - 匝道 Ramp：`ramp_*`
 - 固定合流点（冲突点）：`n_merge`
-- 下游边：`main_h4`
+- 过点口径：进入 `merge_edge=main_h4` 视为 cross merge
 
 ### 2) 仿真参数（默认值）
 - `step-length = 0.1s`
-- `duration = 300s`（调试时可先跑 20~60s）
+- `duration = 120s`（回归默认；调试时可先跑 20~60s）
 - 控制区长度（到合流点剩余距离）：`control_zone_length_m = 600`
-- 重规划周期：`replan_interval_s = 0.1`（先按你要求每步重算；代码里做成参数，后续可对比 0.5）
+- 流上限（用于自由流 ETA 与 `v_des` 上限，不等同于 `.net.xml` lane speed）：
+  - `main_vmax_mps=25.0`
+  - `ramp_vmax_mps=16.7`（若希望与当前 `ramp_min_v1.net.xml` 的 `25.00` 对齐，可运行时传 `--ramp-vmax-mps 25.0`）
+- 规划更新策略：
+  - `no_control`：不生成计划
+  - `fifo`：车辆入控制区时分配并冻结 `target_cross_time`（后续不重排）
+  - `dp`：属于 Stage 2，默认 `dp_replan_interval_s=0.5`（详见 `PLAN_RAMP_STAGE2.md`）
 
 ### 3) 车流（起步低流量）
 建议起步流量（便于稳定跑通）：
@@ -103,7 +114,7 @@
 - lane width：`3.75`
 - speed：
   - main：`25`
-  - ramp：`16.7`
+  - ramp：`25`（当前 `ramp_min_v1.net.xml` 已把 ramp 相关 lane speed 抬到 `25.00` 并在 xml 内注明原值，用于 A/B 验证）
 
 - [ ] TODO 2.3：用 netedit 按上述节点/边命名创建网络，并保存为 `ramp_min_v1.net.xml`
   - 验证点 A（可视化）：`sumo-gui -n ramp_min_v1.net.xml` 能打开并看到合流结构。
@@ -175,7 +186,7 @@ Stage 1 先用 1 个 vType：`cav`（参数先朴素，重点是稳定）
 定义控制区：`D_to_merge <= control_zone_length_m`。
 
 - [ ] TODO 6.1：实现 `D_to_merge` 计算（固定合流点版本）
-  - 推荐实现：基于 `route edges` 的“剩余长度累加”，不依赖 `getDrivingDistance`（避免 SUMO API 差异）
+  - 当前实现：优先用 `traci.vehicle.getDrivingDistance(veh_id, merge_edge, 0.0)` 计算到 `merge_edge` 的沿路网距离；必要时再 fallback 到“route edges 剩余长度累加”
   - 验证点：
     - 对任意车辆，`D_to_merge` 随时间单调下降（允许数值噪声）
     - 车辆进入 `main_h4` 后不再出现在控制区 trace（或 `D_to_merge` 变为 0 并停止记录）
@@ -264,13 +275,13 @@ Stage 1 指标建议（先稳定再加）：
 把测试写成固定命令，后续你 vibe coding 每做一小步就跑一下。
 
 - [ ] TODO 9.1：Smoke test：`no_control` 运行 20s
-  - 命令（示例）：`SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy no_control --duration-s 20 --out-dir /tmp/ramp-stage1/no_control`
+  - 命令（示例）：`SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy no_control --duration-s 20 --out-dir output/ramp-stage1/no_control`
   - 验证点：
     - 输出文件齐全且非空
     - `metrics.json` 可解析（合法 JSON）
 
 - [ ] TODO 9.2：Smoke test：`fifo` 运行 20s
-  - 命令（示例）：`SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy fifo --duration-s 20 --out-dir /tmp/ramp-stage1/fifo`
+  - 命令（示例）：`SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy fifo --duration-s 20 --out-dir output/ramp-stage1/fifo`
   - 验证点：
     - 输出文件齐全且非空
     - `metrics.json.policy_name == "fifo"`
@@ -298,9 +309,11 @@ Stage 1 指标建议（先稳定再加）：
 ### C) 输出文件与字段（当前实现）
 1. `control_zone_trace.csv`：`time,veh_id,stream,edge_id,lane_id,lane_pos,D_to_merge,speed,accel,v_des`
 2. `collisions.csv`：碰撞事件逐步记录（0 碰撞也有表头）
-3. `metrics.json`：至少包含 `merge_success_rate,avg_delay_at_merge_s,throughput_veh_per_h,collision_count,stop_count`
-4. `config.json`：记录本次运行参数
-5. `plans.csv`：FIFO 调度日志（`entry_rank/order_index/natural_eta/target_cross_time/gap_from_prev/v_des`）
+3. `plans.csv`：FIFO 调度日志（`entry_rank/order_index/natural_eta/target_cross_time/gap_from_prev/v_des`）
+4. `commands.csv`：每步命令快照（`time,veh_id,stream,d_to_merge_m,v_cmd_mps,release_flag`）
+5. `events.csv`：稀疏事件流（`enter_control/leave_control/cross_merge/plan_recompute/...`）
+6. `metrics.json`：至少包含 `merge_success_rate,avg_delay_at_merge_s,throughput_veh_per_h,collision_count,stop_count`
+7. `config.json`：记录本次运行参数
 
 ### D) 关键统计口径补充
 1. `merge_success_rate` 使用“已评估车辆集合”：从进入控制区车辆中剔除仿真结束时仍在控制区的 `pending_unfinished`，避免固定时长截断造成虚假失败。
@@ -308,9 +321,8 @@ Stage 1 指标建议（先稳定再加）：
 3. `stop_count` 口径：速度 `< 0.1 m/s` 的“停住事件次数”（进入停住状态计一次，不是累计秒）。
 
 ### E) 验证快照（`duration=120s, seed=1`）
-1. `no_control`：`merge_success_rate=1.0, avg_delay_at_merge_s=6.9334, throughput_veh_per_h=540.0, stop_count=9`
-2. `fifo`：`merge_success_rate=1.0, avg_delay_at_merge_s=6.1996, throughput_veh_per_h=480.0, stop_count=12`
-3. FIFO 约束验证：`entry_rank_inconsistency=0, target_mono_bad=0, gap_bad=0`
+1. 指标快照不在本文硬编码具体数值；以 `docs/RAMP_VALIDATION.md` 的历史结果表为准（同 seed/同 duration）。
+2. FIFO 约束验证：`uv run python -m ramp.experiments.check_plans --plans output/ramp_min_v1/fifo/plans.csv --delta-1-s 1.5 --delta-2-s 1.5`（按 `time` 分组；同帧检查）
 
 ### F) GUI 与命令行注意事项
 1. `sumo-gui` 若加 `--start` 且无 `--delay`，会快速跑完，看起来像“刚打开就结束”。
@@ -318,8 +330,8 @@ Stage 1 指标建议（先稳定再加）：
 3. 命令参数之间必须有空格，例如 `--no-step-log true --quit-on-end true`，不要写成 `true--quit-on-end`。
 
 ### G) Stage 2 前的最小回归命令集（保留）
-1. `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy no_control --duration-s 60 --seed 1 --out-dir /tmp/ramp-stage1/reg-no-control`
-2. `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy fifo --duration-s 60 --seed 1 --fifo-gap-s 1.5 --out-dir /tmp/ramp-stage1/reg-fifo`
+1. `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy no_control --duration-s 60 --seed 1 --out-dir output/ramp-stage1/reg-no-control`
+2. `SUMO_GUI=0 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy fifo --duration-s 60 --seed 1 --fifo-gap-s 1.5 --out-dir output/ramp-stage1/reg-fifo`
 3. `uv run python -c "import traci, sumolib; print('ok')"`
 
 ---

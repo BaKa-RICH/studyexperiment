@@ -39,6 +39,8 @@ SUMO_GUI=1 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy
 SUMO_GUI=1 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy dp --delta-1-s 1.5 --delta-2-s 2.0 --dp-replan-interval-s 0.5 --duration-s 120 --step-length 0.1 --seed 1
 ```
 
+注意：GUI 调试如果你手动关闭 `sumo-gui` 窗口，脚本可能会异常退出，导致 `metrics.json/config.json` 等“仿真结束时写入”的文件缺失。需要完整输出时建议让仿真按 `--duration-s` 自然跑完。
+
 ### 1.5 输出完整性（最低要求）
 每组输出目录至少包含：
 - `control_zone_trace.csv`
@@ -68,4 +70,3 @@ SUMO_GUI=1 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy
 |2026-02-23 00:25 CST|Step 9：一致性指标落盘|无|12|20|600/h|660/h|开始可量化“计划-执行一致性”|
 |2026-02-23 16:28 CST|A/B：匝道限速抬到 25|`ramp_min_v1.net.xml` 中 ramp lane speed `16.70->25.00`（含 internal）|0（原 12）|20（原 20）|630/h（原 600/h）|660/h（不变）|证明 FIFO mismatch 主要来自 main/ramp 速度差导致的“先到先 commit”|
 |2026-02-23 16:28 CST|修复：`D_to_merge` 用 `getDrivingDistance`|代码修复（见 `ramp/runtime/state_collector.py`）|0|0（原 20/22）|630/h|660/h|修复后 internal edge 上 `D_to_merge` 回到合理量级，DP mismatch 归零|
-

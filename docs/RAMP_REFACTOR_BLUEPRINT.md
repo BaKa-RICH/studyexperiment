@@ -1,8 +1,11 @@
-# RAMP 重构蓝图（讨论版）
+# RAMP 架构与重构记录（已落地）
 
 目标：只围绕 `ramp/`，把现有的“仿真推进 + 状态采集 + 调度 + 控制 + 记录/指标”梳理成清晰模块边界，方便你接下来读代码、定位问题、扩展算法（先聚焦 `fifo/dp`，不超前做 Stage 3 的大系统）。
 
-本蓝图不会立刻改代码；它是“要怎么拆、拆完接口长什么样、哪些输出/指标要补”的共识文档。
+本文件原本是“重构蓝图”；目前已按蓝图落地实现，并多轮回归验证。本文作为：
+- `ramp/` 架构说明（方便你读代码/定位问题）
+- 关键口径冻结（避免上下文压缩导致遗忘）
+- 重构与调试的记录入口（回归命令与历史结果统一指向 `docs/RAMP_VALIDATION.md`）
 
 ---
 
@@ -15,12 +18,19 @@
 - 路网：`ramp/scenarios/<scenario>/<scenario>.net.xml`
 
 ### 0.2 算法实现位置
-- `fifo`：主要逻辑在 `ramp/experiments/run.py`（入控制区时冻结 `target_cross_time`）
-- `dp`：调度核心在 `ramp/scheduler/dp.py`，`t_min` 在 `ramp/scheduler/arrival_time.py`，接入与执行在 `ramp/experiments/run.py`
+- `no_control`：`ramp/policies/no_control/`（不生成计划，仅输出表头/记录）
+- `fifo`：
+  - scheduler：`ramp/policies/fifo/scheduler.py`（入控制区时冻结 `target_cross_time`）
+  - command builder：`ramp/policies/fifo/command_builder.py`
+- `dp`：
+  - 调度核心：`ramp/scheduler/dp.py`
+  - `t_min`：`ramp/scheduler/arrival_time.py`
+  - scheduler 封装：`ramp/policies/dp/scheduler.py`（含 `dp_replan_interval_s=0.5` 冻结）
+  - command builder：`ramp/policies/dp/command_builder.py`
 
 ### 0.3 输出目录（已调整）
 - 默认输出：`output/<scenario>/<policy>/`（同 policy 覆盖；不同 policy 不覆盖）
-- 文件：`control_zone_trace.csv`、`plans.csv`、`metrics.json`、`config.json`、`collisions.csv`
+- 文件：`control_zone_trace.csv`、`plans.csv`、`commands.csv`、`events.csv`、`metrics.json`、`config.json`、`collisions.csv`
 
 ### 0.4 已拍板的关键默认口径（防止上下文压缩导致遗忘）
 - 仿真步长：`step-length=0.1s`
@@ -34,6 +44,7 @@
   - `delta_1_s=1.5`，`delta_2_s=2.0`
   - `t_min` 用 CAVSim ArrivalTime（两段式）公式 + 边界保护
   - `dp_replan_interval_s=0.5`：`0.5s` 内冻结 schedule，但仍每步（`0.1s`）下发控制命令
+- `D_to_merge`：优先用 `traci.vehicle.getDrivingDistance(veh_id, merge_edge, 0.0)`（避免 internal edge `:n_merge*` 导致的跳大值）
 - 强制顺序（你的要求）：`fifo/dp` 算出的 passing order 就是最终通行顺序，SUMO 不能再用“主线优先/匝道让行”改写
   - 强制范围：只在控制区内接管
   - 接管手段：控制区内车辆切 `speedMode=23`，关闭 SUMO 的“路口让行/优先级裁决”；释放控制时恢复车辆进入控制区前的 speedMode
@@ -234,7 +245,10 @@
 
 ## 7. 必须冻结的口径（实现时不得漂）
 
-1. 场景冻结：不改 `ramp/scenarios/ramp_min_v1/*.net.xml/*.rou.xml/*.sumocfg`
+1. 场景冻结：
+   - `ramp/scenarios/ramp_min_v1/` 作为基线场景，原则上不再做结构性变更
+   - 已发生的 A/B 变更：`ramp_min_v1.net.xml` 中对 ramp 相关 lane speed 做过抬速（xml 内有注释，且对照输出保存在 `output/ramp_min_v1/*_before_ramp25/`）
+   - 后续如果要升级路网结构（加速车道/合流区间），新增场景目录（例如 `ramp_min_v2`），不要继续叠加到 `ramp_min_v1`
 2. 控制区范围：强制顺序只在控制区内接管（`0 < D_to_merge <= control_zone_length_m`），当前默认 `600m`
 3. 强制顺序目标：`fifo/dp` 的 passing order 应尽量等于实际过点顺序
    - 接管手段：控制区内车辆切 `speedMode=23`（关闭路口让行/优先级裁决），释放控制时恢复原 speedMode
@@ -254,7 +268,7 @@ cd /home/liangyunxuan/src/Sumo-Carla-simulation-for-Vehicle-Road-Cloud-Integerat
 
 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy no_control --duration-s 120 --step-length 0.1 --seed 1
 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy fifo --fifo-gap-s 1.5 --duration-s 120 --step-length 0.1 --seed 1
-uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy dp --delta-1-s 1.5 --delta-2-s 2.0 --duration-s 120 --step-length 0.1 --seed 1
+uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy dp --delta-1-s 1.5 --delta-2-s 2.0 --dp-replan-interval-s 0.5 --duration-s 120 --step-length 0.1 --seed 1
 ```
 
 ### 8.2 plans.csv 约束检查（注意 fifo/dp 口径不同）
@@ -275,7 +289,7 @@ uv run pytest -q ramp/tests
 ```bash
 SUMO_GUI=1 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy no_control --duration-s 120 --step-length 0.1 --seed 1
 SUMO_GUI=1 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy fifo --fifo-gap-s 1.5 --duration-s 120 --step-length 0.1 --seed 1
-SUMO_GUI=1 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy dp --delta-1-s 1.5 --delta-2-s 2.0 --duration-s 120 --step-length 0.1 --seed 1
+SUMO_GUI=1 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy dp --delta-1-s 1.5 --delta-2-s 2.0 --dp-replan-interval-s 0.5 --duration-s 120 --step-length 0.1 --seed 1
 ```
 
 ### 8.5 文件完整性检查（最低要求）

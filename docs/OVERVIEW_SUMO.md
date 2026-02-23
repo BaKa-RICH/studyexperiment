@@ -1,50 +1,48 @@
-# 项目概览（纯 SUMO 视角）
+# 项目概览（RAMP 纯 SUMO 路线）
 
-本仓库包含多种交通仿真/规划相关代码。你当前路线是 **纯 SUMO**（不使用 CARLA），因此本文档只聚焦 SUMO 可直接运行的部分，并把与 CARLA 强绑定的内容标注为“可忽略”。
+本仓库包含多种原型代码；当前维护的主线是 `ramp/`：基于 **SUMO + TraCI + Python(uv)** 的匝道合流实验框架（`no_control / fifo / dp`）。
 
-## 目录结构（与纯 SUMO 相关）
+## 你现在应该看什么（最短路径）
 
-- `CSDF/`
-  - 论文复现：*A homogeneous multi-vehicle cooperative group decision-making method in complicated mixed traffic scenarios*。
-  - **纯 SUMO**：通过 TraCI 驱动 SUMO，检测风险(TTC)触发行为规划与轨迹规划，然后执行轨迹控制。
-  - 入口：
-    - `CSDF/main.py`：原始交互式跑法（默认 GUI）。
-    - `CSDF/batch_run.py`：批量跑 + 导出 CSV（我们新增）。
-  - 场景/配置：
-    - `CSDF/scene_4/scene4.sumocfg`：SUMO 配置
-    - `CSDF/scene_4/road.net.xml`：路网
-    - `CSDF/scene_4/scene4.rou.xml`：车流/车辆定义（包含 `cav_3_0/cav_2_0/cav_2_1/hdv_3_0...`）
-  - 输出：
-    - `CSDF/sumo_data/vehicle_trace_*.csv`：轨迹采样
-    - `CSDF/sumo_data/collisions_*.csv`：碰撞事件
+1. `ramp/`：代码主线（实验入口、场景、策略实现、运行时框架）
+2. `docs/RAMP_VALIDATION.md`：必跑回归命令 + 历史关键结果
+3. `docs/PLAN_RAMP_STAGE1.md`、`docs/PLAN_RAMP_STAGE2.md`：Stage 1/2 冻结口径（输出/指标/约束/参数）
+4. `docs/RAMP_REFACTOR_BLUEPRINT.md`：当前 `ramp/` 的架构与数据流
 
-- `Scene/`
-  - 多个 SUMO 或 SUMO-CARLA 联合场景集合。
-  - 纯 SUMO 可跑示例：
-    - `Scene/scene10(Sumo)/Scene10_sumo v2.py`：TraCI 驱动的示例（可 headless）。
+## 目录结构（只列 ramp 相关）
 
-- `mutil_vehicle/`
-  - 多车规划相关（仓库内说明为 CARLA-SUMO 联合仿真背景）。若你只做纯 SUMO，可暂时不看。
+- `ramp/experiments/`
+  - 运行入口：`uv run python -m ramp.experiments.run`
+  - 分析小工具：`dump_plans_snapshot.py`、`dump_mismatch_report.py` 等
+- `ramp/scenarios/`
+  - SUMO 场景文件：`*.net.xml/*.rou.xml/*.sumocfg`
+  - 最小场景：`ramp/scenarios/ramp_min_v1/`
+- `ramp/policies/`
+  - 策略实现（按 policy 分目录）：`no_control/ fifo/ dp`
+- `ramp/runtime/`
+  - 仿真推进、状态采集、命令下发、记录/指标（通用层）
 
-## 纯 SUMO 的“运行形态”
+## 纯 SUMO 的“运行形态”（ramp 也是同样结构）
 
 纯 SUMO 通常分两层：
 1. `*.sumocfg`/`*.net.xml`/`*.rou.xml`：SUMO 原生输入（路网 + 车流/车辆）。
-2. Python + TraCI：在仿真循环里 `traci.simulationStep()` 推进，并实时读取/控制车辆状态（速度、换道、位置等）。
+2. Python + TraCI：在仿真循环里 `traci.simulationStep()` 推进，并实时读取/控制车辆状态（速度、位置等）。
 
-本仓库的 `CSDF/` 和 `Scene/scene10(Sumo)/` 都属于这种模式。
-
-## 关键配置文件类型
+## 关键配置文件类型（SUMO）
 
 - `.sumocfg`：SUMO 主配置。指定路网(`net-file`)、车流(`route-files`)、step-length 等。
-- `.net.xml`：路网（lane/edge/junction）。通常由 `netconvert` 生成。
+- `.net.xml`：路网（lane/edge/junction）。
 - `.rou.xml`：route/flow/vehicle/vType 定义。
-- `osm.view.xml`：GUI 显示设置（仅在 `sumo-gui` 时有用）。
+- `*.gui.xml`：GUI 显示设置（仅 `sumo-gui` 时有用）。
 
-## 依赖与环境（纯 SUMO）
+## 依赖与环境（RAMP）
 
-- 你需要本机安装 SUMO（提供 `sumo`、`sumo-gui`、以及 `SUMO_HOME/tools` 里的 Python TraCI 工具）。
-- Python 依赖由 `uv` 管理：`uv sync` 后使用 `uv run ...` 运行脚本。
+- 需要本机安装 SUMO（`sumo`、`sumo-gui` 可用；建议 `SUMO_HOME` 正确）。
+- Python 依赖由 `uv` 管理：`uv sync` 后用 `uv run ...` 运行。
 
-下一步建议先看 `docs/RUNBOOK_SUMO.md`，再决定你是以 `CSDF` 论文复现为主，还是以 `Scene/*` 自定义场景为主。
+## 其他目录（当前不作为主线）
 
+以下目录仍在仓库中，但当前文档与回归不以它们为主：
+- `CSDF/`：论文复现与 TraCI 轨迹执行原型（见 `docs/CSDF.md`）
+- `Scene/`：历史场景集合
+- `mutil_vehicle/`：CARLA-SUMO 联合仿真背景下的多车规划原型
