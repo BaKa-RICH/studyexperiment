@@ -420,3 +420,33 @@ SUMO_GUI=1 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy
 |2026-02-23 00:15 CST|Step 8 强制顺序接管（speedMode=23 + commit）|thr=540.0, delay=8.7756, coll=0, stop=9|thr=600.0, delay=9.1534, coll=0, stop=1|thr=660.0, delay=5.3090, coll=0, stop=0|gap_bad=0, mono_bad=0（delta1=1.5, delta2=1.5）|gap_bad=0, mono_bad=0（delta1=1.5, delta2=2.0）|`uv run pytest -q ramp/tests` 26 passed；碰撞仍为 0；出现若干 emergency braking warning（需在下一步一致性指标里继续量化）|
 |2026-02-23 00:25 CST|Step 9 新增 commands/events + 一致性指标|thr=540.0, delay=8.7756, coll=0, stop=9|thr=600.0, delay=9.1534, coll=0, stop=1|thr=660.0, delay=5.3090, coll=0, stop=0|gap_bad=0, mono_bad=0（delta1=1.5, delta2=1.5）|gap_bad=0, mono_bad=0（delta1=1.5, delta2=2.0）|`uv run pytest -q ramp/tests` 26 passed；三组均产出 `commands.csv/events.csv`；一致性指标已写入 `metrics.json`（如 fifo mismatch=12, dp mismatch=20）|
 |2026-02-23 00:29 CST|Step 10 plans 快照工具|thr=540.0, delay=8.7756, coll=0, stop=9|thr=600.0, delay=9.1534, coll=0, stop=1|thr=660.0, delay=5.3090, coll=0, stop=0|gap_bad=0, mono_bad=0（delta1=1.5, delta2=1.5）|gap_bad=0, mono_bad=0（delta1=1.5, delta2=2.0）|`uv run pytest -q ramp/tests` 26 passed；`dump_plans_snapshot` 对 `fifo/dp` 的 `time=40.1` 均能正确打印 interleaving 顺序|
+
+## 11. 进入stage3前的准备工作
+
+1. 把 v1 的 Stage 2.5 基线“写死到文档+版本”
+
+  - 把你现在跑出来的 seeds=1..5 矩阵命令、结果表、阈值写进 docs/RAMP_VALIDATION.md
+  - 明确验收口径：dp 的 collision=0 + check_plans=0 + mismatch=0 是硬门槛；fifo 的 mismatch 不作为门槛（因为你已接受它弱）
+  - 记录一个“基线版本号”：至少写清楚 git commit hash（可选再打 tag）
+
+  2. 明确 v2 路网的“口径合同”（不然代码会被迫大改）
+
+  - v2 的命名/语义要先定：哪些 edge 属于 main/ramp（影响 stream 判定），哪个 edge/区域算 cross_merge（影响指标），哪个 internal edge
+    前缀算 commit（影响执行不可逆边界）
+  - 你让另一个 agent 画网的时候，最好把这些命名约定一起对齐，能省掉大量适配工作
+
+  3. 把现有代码里“强耦合路网”的点做成 scenario config（为 v2 做准备）
+
+  - 至少把这三类变成每个 scenario 的配置项，而不是写死在逻辑里：stream 判定规则、commit 判定规则、cross_merge 判定（merge_edge/
+    merge_zone）
+  - 目的：v2 上线时尽量“改配置不改逻辑”，避免 run.py/runtime/policies 全线返工
+
+  4. 给 v2 建第二套 baseline matrix（Stage 3 的新世界基线）
+
+  - v2 出来后，先跑三策略（即便 fifo 弱也跑）+ seeds=1..5，形成 v2 的 docs/RAMP_VALIDATION.md 小节
+  - 这样 Stage 3 做算法时，你能同时回答两件事：在 v1 不退化、在 v2 真提升
+
+  5. Stage 3 规格先落一页“接口不变/口径变更清单”
+
+  - 关键是把 Stage 3 的输出语义说清楚：还是“时序调度 target_cross_time”主线，还是引入“合流区间/可变合流点”
+  - 一旦口径要从“固定 merge 点”升级到“merge 区间”，要提前写清楚 D_to_merge、cross_merge、check_plans 的定义如何改
