@@ -1,0 +1,17 @@
+<connections>
+    <!-- main_h2 (4 lanes) must map to main_h3 lane1-4; lane0 is reserved as aux -->
+    <connection from="main_h2" to="main_h3" fromLane="0" toLane="1"/>
+    <connection from="main_h2" to="main_h3" fromLane="1" toLane="2"/>
+    <connection from="main_h2" to="main_h3" fromLane="2" toLane="3"/>
+    <connection from="main_h2" to="main_h3" fromLane="3" toLane="4"/>
+
+    <!-- ramp_h6 dual lanes both enter aux lane main_h3_0 -->
+    <connection from="ramp_h6" to="main_h3" fromLane="0" toLane="0"/>
+    <connection from="ramp_h6" to="main_h3" fromLane="1" toLane="0"/>
+
+    <!-- at n_merge, aux lane main_h3_0 terminates (no connection) -->
+    <connection from="main_h3" to="main_h4" fromLane="1" toLane="0"/>
+    <connection from="main_h3" to="main_h4" fromLane="2" toLane="1"/>
+    <connection from="main_h3" to="main_h4" fromLane="3" toLane="2"/>
+    <connection from="main_h3" to="main_h4" fromLane="4" toLane="3"/>
+</connections>

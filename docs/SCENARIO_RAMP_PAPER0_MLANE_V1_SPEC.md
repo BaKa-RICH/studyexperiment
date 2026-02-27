@@ -16,7 +16,7 @@
 ### 1.1 设计目标（v1 必须满足）
 
 1. **拓扑核心**：4 车道主线 + 加速/辅助车道（aux lane）+ 单匝道双车道（dual-lane ramp），并采用 paper0 的典型长度/速度/需求口径（veh/h/lane）。
-1. **保持与现有 `ramp` 代码“硬耦合”兼容**（见第 2 节），确保无需改代码也能跑通（至少 `no_control/fifo/dp` 的基线实验能启动并产出指标）。
+1. **保持与现有 `ramp` 代码“硬耦合”兼容**（见第 2 节）：核心调度算法（`fifo/dp` 的排序与约束）不改；允许且预期 runtime 层做最小适配（`lane_id` 过滤、`laneChangeMode` 角色化设置、`d_to_merge` 异常值兜底）。
 1. **合流机制**：采用方式B（真实换道）——匝道车在 `main_h3` 内从 aux lane 换道到主线最右车道；`n_merge` 作为 aux lane 终止的 junction；`main_h4` 作为 merge 后的 `merge_edge`（默认值）。
 1. **为后续扩展留接口**：后续可以逐步启用 ramp 双车道竞争（冲突点 A）、paper8 的“分车道限速/分层控制”、以及“灵活合流点（merge region）”。
 
@@ -25,6 +25,12 @@
 1. 不在 v1 引入 paper8 的 L1/L2/L3 分层控制与按车道速度限制（已选 B1：不引入）。
 1. 不在 v1 使用 ramp 双车道同时上车（已选：`departLane="1"` 固定，另一条 ramp lane 暂时无车）。
 1. v1 的方式B 已允许合流在 `main_h3` 区间内任意位置发生（由 SUMO 换道模型决定）；但算法仍以进入 `main_h4` 为“过合流点”的判定口径。
+
+### 1.3 兼容性分层与阶段门槛（新增）
+
+1. **L0（纯 SUMO 层）**：在不改 Python 代码的前提下，新场景至少要能用 `no_control` 跑通并生成完整输出（用于验证“路网/车流是否可运行”）。
+1. **L1（控制语义层）**：`fifo/dp` 要达到“控制对象正确 + 事件口径正确 + 约束可校验”，允许最小 runtime 适配。
+1. v1 验收顺序固定为：先过 L0，再进入 L1；避免在路网未稳定时过早改运行时逻辑。
 
 ---
 
@@ -209,8 +215,10 @@ aux lane（加速车道）的角色：
 | `main_h2` | `n_main_1` | `n_main_2` | 300 | 4 | 25.0 | 2 | 主线 H2（控制区上游段） |
 | `main_h3` | `n_main_2` | `n_merge` | 300 | 5 | 25.0 | 2 | 主线 H3（含 aux lane0） |
 | `main_h4` | `n_merge` | `n_main_3` | 200 | 4 | 25.0 | 2 | 主线 H4（merge_edge） |
-| `ramp_h5` | `n_ramp_0` | `n_ramp_1` | 100 | 2 | 16.7 | 1 | 匝道 H5 |
-| `ramp_h6` | `n_ramp_1` | `n_main_2` | 300 | 2 | 16.7 | 1 | 匝道 H6（进入合流区入口） |
+| `ramp_h5` | `n_ramp_0` | `n_ramp_1` | 100 | 2 | 16.7 | 2 | 匝道 H5 |
+| `ramp_h6` | `n_ramp_1` | `n_main_2` | 300 | 2 | 16.7 | 2 | 匝道 H6（进入合流区入口） |
+
+v1 统一约定：主线与匝道 `priority` 保持相同（本规范统一写为 `2`；若后续改为 `1` 也必须两者一致）。
 
 ### 4.3 车道数与车道索引语义（关键）
 
@@ -334,7 +342,7 @@ v1 速度上限设定（单位 m/s）：
 
 建议（v1）：
 
-1. 不要继续使用“主线 priority=2、匝道 priority=1”的传统设置，让主线和匝道priority相同，这样可以把所有通行权力都交给我们算法来决定
+1. 主线与匝道 `priority` 必须相同（本规范采用 `2/2`），避免由“主线高优先级”隐式改写算法计划顺序
 1. 但注意：在本设计中，关键合流行为是匝道车在 `main_h3` 内从 aux lane（lane0）换道到主线最右车道（lane1），edge priority 对此换道行为的影响有限；更关键的是合流几何与 internal edge 速度限制
 
 ### 5.3 几何与 internal edge 限速（必须规避）
@@ -355,6 +363,20 @@ v1 设计要求：
 1. `n_merge` 相关 internal edges（`:n_merge_*`）speed 不应明显低于 `16.7`（除非你明确要模拟低速弯道）
 1. ramp 进入合流区入口处的 internal connector speed 不应低到个位数 m/s
 
+### 5.4 `stream_vmax` 在 aux lane 的语义（新增）
+
+问题背景：匝道车进入 `main_h3 lane0`（aux）后，车辆 `stream` 仍是 `ramp`，但 lane speed 上限已可能是 `25.0`。这会影响 `natural_eta/t_min` 的估计。
+
+v1 主口径（默认冻结）：
+
+1. 调度估计继续按 `stream` 取上限：`main=25.0`，`ramp=16.7`（即匝道车在 aux lane 上仍按 `16.7` 估计 ETA/t_min）
+1. 该口径优先保证与现有代码和历史基线兼容，避免在建网阶段引入额外变量
+
+对照评估（建议但不阻塞）：
+
+1. 可做 A/B 验证：A=`stream` 上限口径；B=按当前 lane speed 作为有效上限口径
+1. 如果 B 在安全约束不退化前提下显著改善指标，可在后续版本升级并同步更新本规范与验证基线
+
 ---
 
 ## 6. 控制对象、换道与“冲突车道集合”
@@ -363,19 +385,35 @@ v1 设计要求：
 
 你的明确要求：`fifo/dp` 只控“匝道 + 主线最外侧冲突车道”（而不是全主线全车道）。
 
-但是：当前代码 `ramp/runtime/state_collector.py` 的控制区筛选条件只看 `d_to_merge`，不看 lane；`dp/fifo` 的候选集合也不按 lane 过滤。
+控制对象由两个正交维度共同决定（AND 关系）：
 
-v1 落地方式
+1. **距离维度**：`0 < d_to_merge <= control_zone_length_m`（默认 `600m`）
+1. **车道维度**（`E-ctrl`）：
+   - `E-ctrl-1`（推荐）：只控制冲突相关车道
+     - 主线：`main_h2 lane0`（会映射到 `main_h3 lane1`）以及 `main_h3 lane1`
+     - 匝道：`main_h3 lane0`（aux lane）
+   - `E-ctrl-2`：控制区内全车道车辆都纳入控制
 
-选项 E1（推荐）：
+推荐控制判定伪代码（用于统一实现口径）：
 
-1. 主线 4 车道都生成车流（按 veh/h/lane），模拟真实高速场景
-1. 算法只控制 **冲突车道上的车辆**：
-   - `main_h3 lane1`（主线最右车道，即冲突车道；对应 `main_h1/h2 lane0` 流过来的车辆）
-   - `main_h3 lane0`（aux lane，匝道车辆）
-1. 其余主线车辆（`main_h3 lane2/3/4`）自由行驶，不被算法接管
-1. 代码侧在 `StateCollector` 或 scheduler 里按 `lane_id` 过滤，只把以上两类车辆纳入控制/调度
-1. 匝道只在 `ramp_h5 lane1`（靠近主线侧）生成车流，`lane0` 不生成
+```python
+in_control_zone = 0.0 < d_to_merge <= control_zone_length_m
+
+if control_mode == "E-ctrl-1":
+    is_conflict_lane = (
+        (stream == "ramp" and edge_id in {"ramp_h6", "main_h3"} and lane_index in {0, 1}) or
+        (stream == "main" and ((edge_id == "main_h2" and lane_index == 0) or (edge_id == "main_h3" and lane_index == 1)))
+    )
+else:
+    is_conflict_lane = True
+
+is_controlled = in_control_zone and is_conflict_lane
+```
+
+实现提示：
+
+1. 当前代码默认只按 `d_to_merge` 筛选；在 v1 L1 阶段需要补齐 lane 维度过滤
+1. 匝道出流仍固定在 `ramp_h5 lane1`，`lane0` 默认 flow=0（为后续双匝道竞争留口）
 
 ### 6.2 D1：在 `main_h3` 的换道规则（方式B）
 
@@ -405,10 +443,11 @@ v1 落地方式
 
 推荐基线（便于复用现有脚本/指标）：
 
-1. 主线：4 条车道都有流量，但算法只控制冲突车道（见 6.1 的 E1）
-1. 匝道：只在 `departLane="1"` 上出流
-
-（如果你选择 E2，则主线 4 条车道都要给 flow，见 7.2）
+1. 流量范围选项（`E-flow`）：
+   - `E-flow-1`：主线只在冲突车道出流（其余主线车道流量为 0）
+   - `E-flow-2`（推荐）：主线 4 条车道都出流（更接近真实场景）
+1. v1 推荐组合：`E-flow-2 + E-ctrl-1`（全车道有流量，但只控制冲突车道）
+1. 匝道：只在 `departLane="1"` 上出流（`R0` 默认为 0）
 
 ### 7.2 paper0 网格扫参需求（16 组）
 
@@ -443,11 +482,11 @@ route 定义（建议固定，便于代码按前缀判别 stream）：
 1. `q_main_vphpl`：主线“每车道流量”（veh/h/lane）
 1. `q_ramp_vphpl`：匝道“每车道流量”（veh/h/lane）
 
-如果按 E2（主线四车道都出流），则：
+如果按 `E-flow-2`（主线四车道都出流），则：
 
 1. `flow_main_L0/L1/L2/L3` 的 `vehsPerHour = q_main_vphpl`
 
-如果按 E1（只出冲突车道），则：
+如果按 `E-flow-1`（只出冲突车道），则：
 
 1. `flow_main_L0` 的 `vehsPerHour = q_main_vphpl`（冲突车道）
 1. `flow_main_L1/L2/L3` 的 `vehsPerHour = 0`
@@ -515,6 +554,12 @@ v1 推荐保留与 `ramp_min_v1.rou.xml` 一致的 vType 基础参数，并补�
 1. `commit` 检测能触发（车辆进入 `:n_merge*` 时日志出现 `commit_vehicle` 事件）
 1. `d_to_merge` 在 `control_zone_length_m` 内的车辆被纳入控制区，并记录 `t_entry/d_entry`
 
+### 10.4 阶段门槛检查（新增）
+
+1. **L0 门槛（零代码）**：在不改 Python 代码前提下，`no_control` 必须可稳定跑完并产出完整输出文件
+1. **aux `d_to_merge` 验收**：抽样检查 `main_h3 lane0` 匝道车的 `d_to_merge`，不得出现系统性 `-1/极大值/大量缺失`
+1. 仅在 L0 通过后，才进入 L1 的 runtime 最小适配（lane 过滤、`laneChangeMode` 角色化、按需 `d_to_merge` 兜底）
+
 ---
 
 ## 11. 方式B 实现注意事项（建网与代码适配时必读）
@@ -525,7 +570,13 @@ v1 推荐保留与 `ramp_min_v1.rou.xml` 一致的 vType 基础参数，并补�
 
 对于 `main_h3 lane0`（aux）上的匝道车辆，由于 lane0 在 `n_merge` 处**没有下游连接**到 `main_h4`，`getDrivingDistance` 的返回值可能异常（例如返回 -1 或极大值）。
 
-实现时需验证：
+本项在 v1 中升级为 **P0 验收项**，执行顺序为“先验证，后改造”：
+
+1. 先在 L0（零代码 `no_control`）阶段抽样验证 aux lane 车辆 `d_to_merge` 是否稳定
+1. 若验证正常：保持现有实现，不额外改代码
+1. 若验证异常：再启用兜底修复（如下）
+
+按需兜底方案：
 
 1. 如果 `getDrivingDistance` 对 aux lane 车辆返回异常值，需要 fallback 到几何距离计算：`d_to_merge = edge_length - lane_pos`（main_h3 上的剩余距离）
 1. 或者：在车辆成功换道到 lane1 之后，`getDrivingDistance` 应恢复正常（因为 lane1 有下游连接到 main_h4）

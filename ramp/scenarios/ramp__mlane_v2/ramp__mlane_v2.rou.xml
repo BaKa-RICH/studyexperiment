@@ -1,0 +1,24 @@
+<routes>
+    <vType
+        id="cav"
+        accel="2.6"
+        decel="4.5"
+        length="5.0"
+        minGap="2.5"
+        tau="1.0"
+        maxSpeed="25.0"
+        sigma="0.0"
+    />
+
+    <route id="main_route" edges="main_h1 main_h2 main_h3 main_h4"/>
+    <route id="ramp_route" edges="ramp_h5 ramp_h6 main_h3 main_h4"/>
+
+    <!-- StageA L0 smoke baseline: q_main_vphpl=1200, q_ramp_vphpl=500 -->
+    <flow id="flow_main_L0" type="cav" route="main_route" begin="0" end="300" vehsPerHour="1200" departLane="0" departSpeed="max"/>
+    <flow id="flow_main_L1" type="cav" route="main_route" begin="0" end="300" vehsPerHour="1200" departLane="1" departSpeed="max"/>
+    <flow id="flow_main_L2" type="cav" route="main_route" begin="0" end="300" vehsPerHour="1200" departLane="2" departSpeed="max"/>
+    <flow id="flow_main_L3" type="cav" route="main_route" begin="0" end="300" vehsPerHour="1200" departLane="3" departSpeed="max"/>
+
+    <flow id="flow_ramp_R0" type="cav" route="ramp_route" begin="0" end="300" number="0" departLane="0" departSpeed="max"/>
+    <flow id="flow_ramp_R1" type="cav" route="ramp_route" begin="0" end="300" vehsPerHour="500" departLane="1" departSpeed="max"/>
+</routes>

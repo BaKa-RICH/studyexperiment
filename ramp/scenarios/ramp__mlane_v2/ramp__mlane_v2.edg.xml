@@ -1,0 +1,9 @@
+<edges>
+    <edge id="main_h1" from="n_main_0" to="n_main_1" priority="2" numLanes="4" speed="25.0"/>
+    <edge id="main_h2" from="n_main_1" to="n_main_2" priority="2" numLanes="4" speed="25.0"/>
+    <edge id="main_h3" from="n_main_2" to="n_merge" priority="2" numLanes="5" speed="25.0"/>
+    <edge id="main_h4" from="n_merge" to="n_main_3" priority="2" numLanes="4" speed="25.0"/>
+
+    <edge id="ramp_h5" from="n_ramp_0" to="n_ramp_1" priority="2" numLanes="2" speed="16.7"/>
+    <edge id="ramp_h6" from="n_ramp_1" to="n_main_2" priority="2" numLanes="2" speed="16.7"/>
+</edges>
