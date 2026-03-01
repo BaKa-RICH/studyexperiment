@@ -18,6 +18,7 @@ class ControllerApplyResult:
 class Controller:
     traci: Any
     takeover_speed_mode: int = 23
+    ramp_lc_target_lane: int = 1
     controlled_vehicle_ids: set[str] = field(default_factory=set)
     original_speed_mode_by_vehicle: dict[str, int] = field(default_factory=dict)
 
@@ -67,6 +68,28 @@ class Controller:
                 result.restored_ids.add(veh_id)
         self.controlled_vehicle_ids = {veh_id for veh_id in current_controlled if veh_id in active_vehicle_ids}
         return result
+
+    def apply_lane_change_modes(
+        self,
+        *,
+        control_zone_state: dict[str, dict[str, float | str]],
+    ) -> None:
+        LC_MODE_PROHIBIT_ALL = 0
+        for veh_id, vehicle_state in control_zone_state.items():
+            stream = str(vehicle_state['stream'])
+            edge_id = str(vehicle_state['edge_id'])
+            lane_id = str(vehicle_state['lane_id'])
+            if edge_id != 'main_h3':
+                continue
+            if stream == 'main':
+                self.traci.vehicle.setLaneChangeMode(veh_id, LC_MODE_PROHIBIT_ALL)
+            elif stream == 'ramp':
+                lane_index = int(lane_id.split('_')[-1]) if '_' in lane_id else -1
+                if lane_index == 0:
+                    pass
+                elif lane_index >= 1 and self.ramp_lc_target_lane != -1:
+                    if lane_index >= self.ramp_lc_target_lane:
+                        self.traci.vehicle.setLaneChangeMode(veh_id, LC_MODE_PROHIBIT_ALL)
 
     def release_all(self, *, active_vehicle_ids: set[str]) -> ControllerApplyResult:
         result = ControllerApplyResult()

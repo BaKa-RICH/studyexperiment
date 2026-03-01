@@ -450,3 +450,51 @@ SUMO_GUI=1 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy
 
   - 关键是把 Stage 3 的输出语义说清楚：还是“时序调度 target_cross_time”主线，还是引入“合流区间/可变合流点”
   - 一旦口径要从“固定 merge 点”升级到“merge 区间”，要提前写清楚 D_to_merge、cross_merge、check_plans 的定义如何改
+
+- 当前 ramp 项目各模块的耦合关系
+  flowchart TD
+    subgraph SUMO_Layer ["SUMO Layer (pure XML, no Python)"]
+        NetXML["net.xml\nEdge/Lane/Connection/Junction"]
+        RouXML["rou.xml\nRoute/Flow/vType"]
+        SumoCfg["sumocfg"]
+    end
+
+    subgraph Runtime_Layer ["Runtime Layer (scene-aware)"]
+        SimDriver["SimulationDriver\n(traci start/step/close)"]
+        StateCol["StateCollector\n(d_to_merge, stream, control_zone)"]
+        Ctrl["Controller\n(speedMode takeover, commit detect)"]
+    end
+
+    subgraph Policy_Layer ["Policy Layer (scene-agnostic)"]
+        FIFO_Sched["fifo/scheduler\n(entry_order -> Plan)"]
+        DP_Sched["dp/scheduler\n(main_seq + ramp_seq -> Plan)"]
+        NC_Sched["no_control/scheduler\n(empty Plan)"]
+        FIFO_Cmd["fifo/command_builder\n(Plan -> v_des)"]
+        DP_Cmd["dp/command_builder\n(Plan -> v_des)"]
+        NC_Cmd["no_control/command_builder\n(empty Command)"]
+    end
+
+    subgraph Core_Algorithm ["Core Algorithm (pure math)"]
+        DPSchedule["scheduler/dp.py\n(dp_schedule: DP table)"]
+        ArrTime["scheduler/arrival_time.py\n(t_min calculation)"]
+    end
+
+    subgraph Orchestrator ["Orchestrator"]
+        RunPy["experiments/run.py\n(main loop, I/O, metrics)"]
+    end
+
+    SumoCfg --> SimDriver
+    SimDriver -->|"traci"| StateCol
+    StateCol -->|"CollectedState\n(control_zone_state)"| RunPy
+    RunPy -->|"control_zone_state\n+ entry_info"| FIFO_Sched
+    RunPy -->|"control_zone_state\n+ entry_info"| DP_Sched
+    RunPy -->|"(nothing)"| NC_Sched
+    DP_Sched -->|"t_min query"| ArrTime
+    DP_Sched -->|"main_seq, ramp_seq,\nt_min_s"| DPSchedule
+    FIFO_Sched -->|"Plan"| FIFO_Cmd
+    DP_Sched -->|"Plan"| DP_Cmd
+    NC_Sched -->|"Plan"| NC_Cmd
+    FIFO_Cmd -->|"ControlCommand"| Ctrl
+    DP_Cmd -->|"ControlCommand"| Ctrl
+    NC_Cmd -->|"ControlCommand"| Ctrl
+    Ctrl -->|"traci.setSpeed\ntraci.setSpeedMode"| SimDriver

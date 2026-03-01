@@ -15,12 +15,32 @@ def _stream_from_route(route_edges: tuple[str, ...] | list[str]) -> str:
     return 'unknown'
 
 
-def _stream_vmax(stream: str, main_vmax_mps: float, ramp_vmax_mps: float) -> float:
+def _stream_vmax(
+    stream: str,
+    main_vmax_mps: float,
+    ramp_vmax_mps: float,
+    *,
+    aux_vmax_mps: float | None = None,
+    lane_id: str = '',
+) -> float:
     if stream == 'main':
         return main_vmax_mps
     if stream == 'ramp':
+        if aux_vmax_mps is not None and lane_id.startswith('main_h3_'):
+            return aux_vmax_mps
         return ramp_vmax_mps
     return max(main_vmax_mps, ramp_vmax_mps)
+
+
+def _is_conflict_lane(stream: str, edge_id: str, lane_index: int) -> bool:
+    if stream == 'ramp':
+        return edge_id in {'ramp_h6', 'main_h3'} and lane_index in {0, 1}
+    if stream == 'main':
+        return (
+            (edge_id == 'main_h2' and lane_index == 0)
+            or (edge_id == 'main_h3' and lane_index == 1)
+        )
+    return False
 
 
 def _build_edge_length_cache(route_edges: tuple[str, ...], traci) -> dict[str, float]:
@@ -82,6 +102,8 @@ class StateCollector:
     main_vmax_mps: float
     ramp_vmax_mps: float
     fifo_gap_s: float
+    control_mode: str = 'E-ctrl-1'
+    aux_vmax_mps: float | None = None
     entered_control: set[str] = field(default_factory=set)
     crossed_merge: set[str] = field(default_factory=set)
     entry_info: dict[str, dict[str, float | str]] = field(default_factory=dict)
@@ -113,6 +135,13 @@ class StateCollector:
             if d_to_merge > self.control_zone_length_m:
                 continue
 
+            lane_id = traci.vehicle.getLaneID(veh_id)
+
+            if self.control_mode == 'E-ctrl-1' and not road_id.startswith(':'):
+                lane_index = int(lane_id.split('_')[-1]) if '_' in lane_id else -1
+                if not _is_conflict_lane(stream, road_id, lane_index):
+                    continue
+
             if veh_id not in self.entered_control:
                 self.entered_control.add(veh_id)
                 self.entry_order.append(veh_id)
@@ -123,7 +152,10 @@ class StateCollector:
                     'stream': stream,
                 }
                 if self.policy == 'fifo':
-                    stream_vmax = _stream_vmax(stream, self.main_vmax_mps, self.ramp_vmax_mps)
+                    stream_vmax = _stream_vmax(
+                        stream, self.main_vmax_mps, self.ramp_vmax_mps,
+                        aux_vmax_mps=self.aux_vmax_mps, lane_id=lane_id,
+                    )
                     natural_eta_at_entry = sim_time + d_to_merge / stream_vmax
                     if self.fifo_last_assigned_target is None:
                         target_cross_time = max(natural_eta_at_entry, sim_time + self.fifo_gap_s)
@@ -145,7 +177,7 @@ class StateCollector:
             control_zone_state[veh_id] = {
                 'stream': stream,
                 'edge_id': road_id,
-                'lane_id': traci.vehicle.getLaneID(veh_id),
+                'lane_id': lane_id,
                 'lane_pos': float(traci.vehicle.getLanePosition(veh_id)),
                 'd_to_merge': d_to_merge,
                 'speed': speed,

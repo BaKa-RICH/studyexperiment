@@ -144,6 +144,9 @@ def run_experiment(
     delta_1_s: float,
     delta_2_s: float,
     dp_replan_interval_s: float,
+    control_mode: str = 'E-ctrl-1',
+    ramp_lc_target_lane: int = 1,
+    aux_vmax_mps: float = 25.0,
 ) -> int:
     if duration_s <= 0:
         raise ValueError('duration-s must be > 0')
@@ -257,6 +260,8 @@ def run_experiment(
         main_vmax_mps=main_vmax_mps,
         ramp_vmax_mps=ramp_vmax_mps,
         fifo_gap_s=fifo_gap_s,
+        control_mode=control_mode,
+        aux_vmax_mps=aux_vmax_mps,
     )
     dp_scheduler: DPScheduler | None = None
     if policy == 'dp':
@@ -266,10 +271,11 @@ def run_experiment(
             main_vmax_mps=main_vmax_mps,
             ramp_vmax_mps=ramp_vmax_mps,
             replan_interval_s=dp_replan_interval_s,
+            aux_vmax_mps=aux_vmax_mps,
         )
 
     sim_driver = SimulationDriver(traci=traci, cmd=cmd)
-    controller = Controller(traci=traci)
+    controller = Controller(traci=traci, ramp_lc_target_lane=ramp_lc_target_lane)
     sim_driver.start()
     with trace_path.open('w', newline='', encoding='utf-8') as trace_fp, collisions_path.open(
         'w', newline='', encoding='utf-8'
@@ -303,6 +309,7 @@ def run_experiment(
                 collected_state = state_collector.collect(sim_time=sim_time, traci=traci)
                 active_vehicle_ids = collected_state.active_vehicle_ids
                 control_zone_state = collected_state.control_zone_state
+                controller.apply_lane_change_modes(control_zone_state=control_zone_state)
                 control_zone_ids = set(control_zone_state)
                 entered_this_step = control_zone_ids - prev_control_zone_ids
                 left_this_step = prev_control_zone_ids - control_zone_ids
@@ -390,6 +397,7 @@ def run_experiment(
                             control_zone_state=control_zone_state,
                             main_vmax_mps=main_vmax_mps,
                             ramp_vmax_mps=ramp_vmax_mps,
+                            aux_vmax_mps=aux_vmax_mps,
                         )
                     else:
                         command = build_dp_command(
@@ -399,6 +407,7 @@ def run_experiment(
                             control_zone_state=control_zone_state,
                             main_vmax_mps=main_vmax_mps,
                             ramp_vmax_mps=ramp_vmax_mps,
+                            aux_vmax_mps=aux_vmax_mps,
                         )
                     prev_target: float | None = None
                     for order_index, veh_id in enumerate(schedule_order, start=1):
@@ -639,6 +648,9 @@ def run_experiment(
         'delta_1_s': delta_1_s,
         'delta_2_s': delta_2_s,
         'dp_replan_interval_s': dp_replan_interval_s,
+        'control_mode': control_mode,
+        'ramp_lc_target_lane': ramp_lc_target_lane,
+        'aux_vmax_mps': aux_vmax_mps,
         'output_dir': str(out_path),
     }
     config_path.write_text(json.dumps(config, indent=2), encoding='utf-8')
@@ -669,6 +681,24 @@ def main() -> int:
     parser.add_argument('--delta-2-s', type=float, default=2.0)
     parser.add_argument('--dp-replan-interval-s', type=float, default=0.5)
     parser.add_argument(
+        '--control-mode',
+        choices=['E-ctrl-1', 'E-ctrl-2'],
+        default='E-ctrl-1',
+        help='Lane filter mode: E-ctrl-1 (conflict lanes only) or E-ctrl-2 (all lanes).',
+    )
+    parser.add_argument(
+        '--ramp-lc-target-lane',
+        type=int,
+        default=1,
+        help='Target lane index for ramp vehicle lane change limit (-1 = no limit).',
+    )
+    parser.add_argument(
+        '--aux-vmax-mps',
+        type=float,
+        default=25.0,
+        help='stream_vmax override for ramp vehicles on aux lane (main_h3).',
+    )
+    parser.add_argument(
         '--gui',
         action='store_true',
         default=os.environ.get('SUMO_GUI', '0') in {'1', 'true', 'True'},
@@ -692,6 +722,9 @@ def main() -> int:
         delta_1_s=args.delta_1_s,
         delta_2_s=args.delta_2_s,
         dp_replan_interval_s=args.dp_replan_interval_s,
+        control_mode=args.control_mode,
+        ramp_lc_target_lane=args.ramp_lc_target_lane,
+        aux_vmax_mps=args.aux_vmax_mps,
     )
 
 

@@ -8,10 +8,19 @@ from ramp.scheduler.arrival_time import minimum_arrival_time_at_on_ramp
 from ramp.scheduler.dp import dp_schedule
 
 
-def _stream_vmax(stream: str, main_vmax_mps: float, ramp_vmax_mps: float) -> float:
+def _stream_vmax(
+    stream: str,
+    main_vmax_mps: float,
+    ramp_vmax_mps: float,
+    *,
+    aux_vmax_mps: float | None = None,
+    lane_id: str = '',
+) -> float:
     if stream == 'main':
         return main_vmax_mps
     if stream == 'ramp':
+        if aux_vmax_mps is not None and lane_id.startswith('main_h3_'):
+            return aux_vmax_mps
         return ramp_vmax_mps
     return max(main_vmax_mps, ramp_vmax_mps)
 
@@ -27,6 +36,7 @@ def _compute_plan_once(
     delta_2_s: float,
     main_vmax_mps: float,
     ramp_vmax_mps: float,
+    aux_vmax_mps: float | None = None,
 ) -> Plan:
     dp_candidates = [veh_id for veh_id in control_zone_state if veh_id not in crossed_merge]
     main_seq = sorted(
@@ -59,7 +69,11 @@ def _compute_plan_once(
         d_to_merge = float(vehicle_state['d_to_merge'])
         speed = float(vehicle_state['speed'])
         accel = float(traci.vehicle.getAccel(veh_id))
-        stream_vmax = _stream_vmax(stream, main_vmax_mps, ramp_vmax_mps)
+        lane_id = str(vehicle_state.get('lane_id', ''))
+        stream_vmax = _stream_vmax(
+            stream, main_vmax_mps, ramp_vmax_mps,
+            aux_vmax_mps=aux_vmax_mps, lane_id=lane_id,
+        )
         t_min_s[veh_id] = minimum_arrival_time_at_on_ramp(
             t_now_s=sim_time_s,
             distance_m=d_to_merge,
@@ -92,6 +106,7 @@ class DPScheduler:
     main_vmax_mps: float
     ramp_vmax_mps: float
     replan_interval_s: float = 0.5
+    aux_vmax_mps: float | None = None
     _last_replan_time_s: float | None = None
     _cached_plan: Plan | None = None
     replanned_last_call: bool = False
@@ -117,6 +132,7 @@ class DPScheduler:
                 delta_2_s=self.delta_2_s,
                 main_vmax_mps=self.main_vmax_mps,
                 ramp_vmax_mps=self.ramp_vmax_mps,
+                aux_vmax_mps=self.aux_vmax_mps,
             )
             self._last_replan_time_s = sim_time_s
             self.replanned_last_call = True
@@ -131,6 +147,7 @@ class DPScheduler:
                 delta_2_s=self.delta_2_s,
                 main_vmax_mps=self.main_vmax_mps,
                 ramp_vmax_mps=self.ramp_vmax_mps,
+                aux_vmax_mps=self.aux_vmax_mps,
             )
             self._last_replan_time_s = sim_time_s
             self.replanned_last_call = True
@@ -145,6 +162,7 @@ class DPScheduler:
                 delta_2_s=self.delta_2_s,
                 main_vmax_mps=self.main_vmax_mps,
                 ramp_vmax_mps=self.ramp_vmax_mps,
+                aux_vmax_mps=self.aux_vmax_mps,
             )
             self._last_replan_time_s = sim_time_s
             self.replanned_last_call = True
