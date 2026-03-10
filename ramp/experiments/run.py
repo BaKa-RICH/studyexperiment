@@ -11,6 +11,9 @@ from ramp.policies.dp.command_builder import build_command as build_dp_command
 from ramp.policies.dp.scheduler import DPScheduler
 from ramp.policies.fifo.command_builder import build_command as build_fifo_command
 from ramp.policies.fifo.scheduler import compute_plan as compute_fifo_plan
+from ramp.policies.hierarchical.command_builder import build_command as build_hierarchical_command
+from ramp.policies.hierarchical.scheduler import HierarchicalScheduler
+from ramp.policies.hierarchical.state_collector_ext import HierarchicalStateCollector
 from ramp.policies.no_control.command_builder import build_command as build_no_control_command
 from ramp.policies.no_control.scheduler import compute_plan as compute_no_control_plan
 from ramp.runtime.controller import Controller
@@ -147,6 +150,7 @@ def run_experiment(
     control_mode: str = 'E-ctrl-1',
     ramp_lc_target_lane: int = 1,
     aux_vmax_mps: float = 25.0,
+    cav_ratio: float = 0.5,
 ) -> int:
     if duration_s <= 0:
         raise ValueError('duration-s must be > 0')
@@ -162,7 +166,7 @@ def run_experiment(
         raise ValueError('delta_1_s and delta_2_s must be > 0')
     if dp_replan_interval_s <= 0:
         raise ValueError('dp-replan-interval-s must be > 0')
-    if policy not in {'no_control', 'fifo', 'dp'}:
+    if policy not in {'no_control', 'fifo', 'dp', 'hierarchical'}:
         raise ValueError(f'Unsupported policy: {policy}')
 
     _ensure_sumo_tools_on_path()
@@ -253,6 +257,7 @@ def run_experiment(
     prev_crossed_merge: set[str] = set()
     plan_snapshots: list[tuple[float, list[str], dict[str, float]]] = []
     speed_tracking_abs_errors: list[float] = []
+    hier_control_mode = 'E-ctrl-2' if policy == 'hierarchical' else control_mode
     state_collector = StateCollector(
         control_zone_length_m=control_zone_length_m,
         merge_edge=merge_edge,
@@ -260,12 +265,24 @@ def run_experiment(
         main_vmax_mps=main_vmax_mps,
         ramp_vmax_mps=ramp_vmax_mps,
         fifo_gap_s=fifo_gap_s,
-        control_mode=control_mode,
+        control_mode=hier_control_mode,
         aux_vmax_mps=aux_vmax_mps,
     )
     dp_scheduler: DPScheduler | None = None
+    hier_collector: HierarchicalStateCollector | None = None
+    hier_scheduler: HierarchicalScheduler | None = None
+    hier_vehicle_types: dict[str, str] = {}
     if policy == 'dp':
         dp_scheduler = DPScheduler(
+            delta_1_s=delta_1_s,
+            delta_2_s=delta_2_s,
+            main_vmax_mps=main_vmax_mps,
+            ramp_vmax_mps=ramp_vmax_mps,
+            replan_interval_s=dp_replan_interval_s,
+            aux_vmax_mps=aux_vmax_mps,
+        )
+    elif policy == 'hierarchical':
+        hier_scheduler = HierarchicalScheduler(
             delta_1_s=delta_1_s,
             delta_2_s=delta_2_s,
             main_vmax_mps=main_vmax_mps,
@@ -277,6 +294,11 @@ def run_experiment(
     sim_driver = SimulationDriver(traci=traci, cmd=cmd)
     controller = Controller(traci=traci, ramp_lc_target_lane=ramp_lc_target_lane)
     sim_driver.start()
+    if policy == 'hierarchical':
+        hier_collector = HierarchicalStateCollector(
+            base_collector=state_collector,
+            traci=traci,
+        )
     with trace_path.open('w', newline='', encoding='utf-8') as trace_fp, collisions_path.open(
         'w', newline='', encoding='utf-8'
     ) as collision_fp, plans_path.open('w', newline='', encoding='utf-8') as plan_fp, commands_path.open(
@@ -306,7 +328,12 @@ def run_experiment(
                     collision_writer.writerow(_collision_to_row(sim_time, collision))
                     collision_count += 1
 
-                collected_state = state_collector.collect(sim_time=sim_time, traci=traci)
+                if policy == 'hierarchical' and hier_collector is not None:
+                    hier_state = hier_collector.collect(sim_time=sim_time, traci=traci)
+                    collected_state = hier_state.base_state
+                    hier_vehicle_types = hier_state.vehicle_types
+                else:
+                    collected_state = state_collector.collect(sim_time=sim_time, traci=traci)
                 active_vehicle_ids = collected_state.active_vehicle_ids
                 control_zone_state = collected_state.control_zone_state
                 controller.apply_lane_change_modes(control_zone_state=control_zone_state)
@@ -368,10 +395,22 @@ def run_experiment(
                         traci=traci,
                     )
                     plan_recomputed = bool(dp_scheduler.replanned_last_call)
+                elif policy == 'hierarchical':
+                    if hier_scheduler is None:
+                        raise RuntimeError('Hierarchical scheduler is not initialized')
+                    plan = hier_scheduler.compute_plan(
+                        sim_time_s=sim_time,
+                        control_zone_state=control_zone_state,
+                        crossed_merge=state_collector.crossed_merge,
+                        entry_info=state_collector.entry_info,
+                        vehicle_types=hier_vehicle_types,
+                        traci=traci,
+                    )
+                    plan_recomputed = bool(hier_scheduler.replanned_last_call)
                 else:
                     plan = compute_no_control_plan(sim_time_s=sim_time)
 
-                if policy in {'fifo', 'dp'}:
+                if policy in {'fifo', 'dp', 'hierarchical'}:
                     if plan is None:
                         raise RuntimeError(f'Policy {policy} must return a Plan')
                     schedule_order = plan.order
@@ -395,6 +434,17 @@ def run_experiment(
                             step_length_s=step_length,
                             plan=plan,
                             control_zone_state=control_zone_state,
+                            main_vmax_mps=main_vmax_mps,
+                            ramp_vmax_mps=ramp_vmax_mps,
+                            aux_vmax_mps=aux_vmax_mps,
+                        )
+                    elif policy == 'hierarchical':
+                        command = build_hierarchical_command(
+                            sim_time_s=sim_time,
+                            step_length_s=step_length,
+                            plan=plan,
+                            control_zone_state=control_zone_state,
+                            vehicle_types=hier_vehicle_types,
                             main_vmax_mps=main_vmax_mps,
                             ramp_vmax_mps=ramp_vmax_mps,
                             aux_vmax_mps=aux_vmax_mps,
@@ -423,8 +473,11 @@ def run_experiment(
                             gap_from_prev = target_cross_time - prev_target
                         prev_target = target_cross_time
 
-                        v_des = float(command.set_speed_mps[veh_id])
-                        desired_speed_by_vehicle[veh_id] = v_des
+                        if veh_id in command.set_speed_mps:
+                            v_des = float(command.set_speed_mps[veh_id])
+                            desired_speed_by_vehicle[veh_id] = v_des
+                        else:
+                            v_des = ''
 
                         plan_writer.writerow(
                             {
@@ -564,7 +617,7 @@ def run_experiment(
 
     consistency_merge_order_mismatch_count = 0
     cross_time_errors: list[float] = []
-    if policy in {'fifo', 'dp'} and plan_snapshots:
+    if policy in {'fifo', 'dp', 'hierarchical'} and plan_snapshots:
         actual_cross_sequence = sorted(
             state_collector.cross_time.items(),
             key=lambda item: (float(item[1]), item[0]),
@@ -598,7 +651,7 @@ def run_experiment(
     )
 
     churn_samples: list[float] = []
-    if policy in {'fifo', 'dp'} and len(plan_snapshots) >= 2:
+    if policy in {'fifo', 'dp', 'hierarchical'} and len(plan_snapshots) >= 2:
         for prev_snapshot, cur_snapshot in zip(plan_snapshots, plan_snapshots[1:]):
             prev_order = prev_snapshot[1]
             cur_order = cur_snapshot[1]
@@ -648,9 +701,10 @@ def run_experiment(
         'delta_1_s': delta_1_s,
         'delta_2_s': delta_2_s,
         'dp_replan_interval_s': dp_replan_interval_s,
-        'control_mode': control_mode,
+        'control_mode': hier_control_mode,
         'ramp_lc_target_lane': ramp_lc_target_lane,
         'aux_vmax_mps': aux_vmax_mps,
+        'cav_ratio': cav_ratio,
         'output_dir': str(out_path),
     }
     config_path.write_text(json.dumps(config, indent=2), encoding='utf-8')
@@ -699,6 +753,12 @@ def main() -> int:
         help='stream_vmax override for ramp vehicles on aux lane (main_h3).',
     )
     parser.add_argument(
+        '--cav-ratio',
+        type=float,
+        default=0.5,
+        help='CAV penetration ratio for mixed traffic scenarios (0.0 to 1.0).',
+    )
+    parser.add_argument(
         '--gui',
         action='store_true',
         default=os.environ.get('SUMO_GUI', '0') in {'1', 'true', 'True'},
@@ -725,6 +785,7 @@ def main() -> int:
         control_mode=args.control_mode,
         ramp_lc_target_lane=args.ramp_lc_target_lane,
         aux_vmax_mps=args.aux_vmax_mps,
+        cav_ratio=args.cav_ratio,
     )
 
 
