@@ -29,6 +29,8 @@ class Controller:
     def _takeover(self, veh_id: str) -> bool:
         if veh_id in self.original_speed_mode_by_vehicle:
             return False
+        if self.traci.vehicle.getTypeID(veh_id) == 'hdv':
+            return False
         original = int(self.traci.vehicle.getSpeedMode(veh_id))
         self.original_speed_mode_by_vehicle[veh_id] = original
         self.traci.vehicle.setSpeedMode(veh_id, self.takeover_speed_mode)
@@ -49,6 +51,8 @@ class Controller:
         current_controlled = set(command.set_speed_mps)
         for veh_id, speed_mps in command.set_speed_mps.items():
             if veh_id not in active_vehicle_ids:
+                continue
+            if self.traci.vehicle.getTypeID(veh_id) == 'hdv':
                 continue
             if self._takeover(veh_id):
                 result.takeover_ids.add(veh_id)

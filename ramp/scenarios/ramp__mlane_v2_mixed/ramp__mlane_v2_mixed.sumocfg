@@ -1,0 +1,9 @@
+<configuration>
+    <input>
+        <net-file value="ramp__mlane_v2_mixed.net.xml"/>
+        <route-files value="ramp__mlane_v2_mixed.rou.xml"/>
+    </input>
+    <time>
+        <step-length value="0.1"/>
+    </time>
+</configuration>
