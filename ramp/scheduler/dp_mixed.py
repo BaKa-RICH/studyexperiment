@@ -75,6 +75,13 @@ def dp_mixed_schedule(
                 if last_lane != -1:
                     gap_s = delta_1_s if last_lane == lane else delta_2_s
 
+                prev_is_hdv = False
+                if last_lane != -1:
+                    if last_lane == 0 and m > 0:
+                        prev_is_hdv = veh_type_by_id.get(main_seq[m - 1]) == 'hdv'
+                    elif last_lane == 1 and n > 0:
+                        prev_is_hdv = veh_type_by_id.get(ramp_seq[n - 1]) == 'hdv'
+
                 if vtype == 'cav':
                     if veh_id not in t_min_cav_s:
                         raise KeyError(f'Missing t_min_cav_s for CAV: {veh_id}')
@@ -90,8 +97,13 @@ def dp_mixed_schedule(
                             f'Missing hdv_predicted_time_s for HDV: {veh_id}'
                         )
                     time_s = float(hdv_predicted_time_s[veh_id])
-                    if last_lane != -1 and time_s < pre_time_s + gap_s - _FEASIBILITY_TOL:
-                        continue
+                    if last_lane != -1:
+                        if prev_is_hdv:
+                            if time_s < pre_time_s - _FEASIBILITY_TOL:
+                                continue
+                        else:
+                            if time_s < pre_time_s + gap_s - _FEASIBILITY_TOL:
+                                continue
                     delay_s = pre_delay_s
 
                 key = (

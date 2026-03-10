@@ -14,6 +14,19 @@ logger = logging.getLogger(__name__)
 _HDV_MIN_SPEED_MPS = 0.1
 
 
+def _on_conflict_lane(stream: str, edge_id: str, lane_id: str) -> bool:
+    """DP scheduling only considers vehicles on conflict lanes."""
+    lane_index = int(lane_id.rsplit('_', 1)[-1])
+    if stream == 'ramp':
+        return edge_id in {'ramp_h6', 'main_h3'} and lane_index in {0, 1}
+    if stream == 'main':
+        return (
+            (edge_id == 'main_h2' and lane_index == 0)
+            or (edge_id == 'main_h3' and lane_index == 1)
+        )
+    return False
+
+
 def _stream_vmax(
     stream: str,
     main_vmax_mps: float,
@@ -88,11 +101,19 @@ def _compute_plan_once(
             eta_s[veh_id] = t_pred
 
     main_seq = sorted(
-        [v for v in dp_candidates if str(control_zone_state[v]['stream']) == 'main'],
+        [v for v in dp_candidates
+         if str(control_zone_state[v]['stream']) == 'main'
+         and _on_conflict_lane('main',
+                               str(control_zone_state[v]['edge_id']),
+                               str(control_zone_state[v]['lane_id']))],
         key=lambda v: (eta_s[v], v),
     )
     ramp_seq = sorted(
-        [v for v in dp_candidates if str(control_zone_state[v]['stream']) == 'ramp'],
+        [v for v in dp_candidates
+         if str(control_zone_state[v]['stream']) == 'ramp'
+         and _on_conflict_lane('ramp',
+                               str(control_zone_state[v]['edge_id']),
+                               str(control_zone_state[v]['lane_id']))],
         key=lambda v: (eta_s[v], v),
     )
 

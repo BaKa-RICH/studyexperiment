@@ -209,22 +209,42 @@ def test_hdv_infeasible_pruning() -> None:
 
 
 def test_hdv_all_infeasible_raises() -> None:
-    """When ALL orderings are infeasible, ValueError is raised."""
-    main_seq = ['m0']
+    """When HDV timing violates monotonicity after a CAV, ValueError is raised."""
+    main_seq = ['m0', 'm1']
     ramp_seq = ['r0']
-    veh_type_by_id = {'m0': 'hdv', 'r0': 'hdv'}
-    hdv_predicted_time_s = {'m0': 1.0, 'r0': 1.5}
+    veh_type_by_id = {'m0': 'cav', 'm1': 'hdv', 'r0': 'hdv'}
+    t_min_cav_s = {'m0': 10.0}
+    hdv_predicted_time_s = {'m1': 3.0, 'r0': 2.0}
 
     with pytest.raises(ValueError, match='No feasible schedule'):
         dp_mixed_schedule(
             main_seq=main_seq,
             ramp_seq=ramp_seq,
             veh_type_by_id=veh_type_by_id,
-            t_min_cav_s={},
+            t_min_cav_s=t_min_cav_s,
             hdv_predicted_time_s=hdv_predicted_time_s,
             delta_1_s=DELTA_1,
             delta_2_s=DELTA_2,
         )
+
+
+def test_hdv_hdv_close_spacing_feasible() -> None:
+    """Two HDVs with close spacing (< delta) should be feasible after relaxation."""
+    main_seq = ['m0']
+    ramp_seq = ['r0']
+    veh_type_by_id = {'m0': 'hdv', 'r0': 'hdv'}
+    hdv_predicted_time_s = {'m0': 1.0, 'r0': 1.5}
+
+    result = dp_mixed_schedule(
+        main_seq=main_seq,
+        ramp_seq=ramp_seq,
+        veh_type_by_id=veh_type_by_id,
+        t_min_cav_s={},
+        hdv_predicted_time_s=hdv_predicted_time_s,
+        delta_1_s=DELTA_1,
+        delta_2_s=DELTA_2,
+    )
+    assert len(result.passing_order) == 2
 
 
 # ---------------------------------------------------------------------------
