@@ -40,4 +40,6 @@ class ControlCommand:
     release_ids: set[str] = field(default_factory=set)
     takeover_speed_mode_by_id: dict[str, int] = field(default_factory=dict)
     restore_speed_mode_ids: set[str] = field(default_factory=set)
+    lane_change_targets: dict[str, tuple[int, float]] = field(default_factory=dict)
+    lane_change_mode_overrides: dict[str, int] = field(default_factory=dict)
 

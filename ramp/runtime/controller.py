@@ -44,10 +44,37 @@ class Controller:
             self.traci.vehicle.setSpeedMode(veh_id, int(original))
         return True
 
+    def _execute_lane_changes(
+        self, command: ControlCommand, active_vehicle_ids: set[str]
+    ) -> set[str]:
+        executed_ids: set[str] = set()
+        for veh_id, (lane_index, duration) in command.lane_change_targets.items():
+            if veh_id not in active_vehicle_ids:
+                continue
+            self.traci.vehicle.changeLane(veh_id, int(lane_index), float(duration))
+            executed_ids.add(veh_id)
+        return executed_ids
+
+    def _apply_lane_change_mode_overrides(
+        self, command: ControlCommand, active_vehicle_ids: set[str]
+    ) -> None:
+        for veh_id, mode in command.lane_change_mode_overrides.items():
+            if veh_id not in active_vehicle_ids:
+                continue
+            self.traci.vehicle.setLaneChangeMode(veh_id, int(mode))
+
     def apply(
         self, *, command: ControlCommand, active_vehicle_ids: set[str]
     ) -> ControllerApplyResult:
         result = ControllerApplyResult()
+        self._apply_lane_change_mode_overrides(
+            command=command, active_vehicle_ids=active_vehicle_ids
+        )
+        lane_change_ids = self._execute_lane_changes(
+            command=command, active_vehicle_ids=active_vehicle_ids
+        )
+        if lane_change_ids:
+            pass
         current_controlled = set(command.set_speed_mps)
         for veh_id, speed_mps in command.set_speed_mps.items():
             if veh_id not in active_vehicle_ids:
