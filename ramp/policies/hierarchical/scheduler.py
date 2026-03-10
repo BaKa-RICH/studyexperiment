@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
+from ramp.policies.hierarchical.merge_point import MergePointManager, VehicleState
+from ramp.policies.hierarchical.state_collector_ext import ZoneAInfo
+from ramp.policies.hierarchical.zone_a import ZoneAEvacuator
 from ramp.runtime.types import Plan
 from ramp.scheduler.arrival_time import minimum_arrival_time_at_on_ramp
 from ramp.scheduler.dp import dp_schedule
@@ -181,7 +184,7 @@ def _try_dp_mixed_with_fallback(
         )
 
 
-@dataclass(slots=True)
+@dataclass
 class HierarchicalScheduler:
     delta_1_s: float
     delta_2_s: float
@@ -189,9 +192,23 @@ class HierarchicalScheduler:
     ramp_vmax_mps: float
     replan_interval_s: float = 0.5
     aux_vmax_mps: float | None = None
+    zone_a_interval_s: float = 1.0
     _last_replan_time_s: float | None = None
     _cached_plan: Plan | None = None
     replanned_last_call: bool = False
+    _merge_point_mgr: MergePointManager | None = None
+    _zone_a_evacuator: ZoneAEvacuator | None = None
+    _last_zone_a_time_s: float | None = None
+    zone_a_actions: dict[str, tuple[int, float]] = field(default_factory=dict)
+    zone_c_actions: dict[str, tuple[int, float]] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self._merge_point_mgr is None:
+            self._merge_point_mgr = MergePointManager()
+        if self._zone_a_evacuator is None:
+            self._zone_a_evacuator = ZoneAEvacuator(
+                v_limit_mps=self.main_vmax_mps,
+            )
 
     def compute_plan(
         self,
@@ -202,8 +219,27 @@ class HierarchicalScheduler:
         entry_info: dict[str, dict[str, float | str]],
         vehicle_types: dict[str, str],
         traci: Any,
+        zone_a_info: ZoneAInfo | None = None,
+        zone_c_lane1_vehicles: list[tuple[str, float, float]] | None = None,
     ) -> Plan:
         self.replanned_last_call = False
+
+        # --- Zone A: upstream evacuation (every zone_a_interval_s) ---
+        need_zone_a = (
+            self._last_zone_a_time_s is None
+            or sim_time_s - self._last_zone_a_time_s
+            >= self.zone_a_interval_s - 1e-9
+        )
+        if need_zone_a and self._zone_a_evacuator is not None:
+            self.zone_a_actions = self._zone_a_evacuator.evaluate(
+                sim_time_s=sim_time_s,
+                zone_a_info=zone_a_info,
+                vehicle_types=vehicle_types,
+                traci=traci,
+            )
+            self._last_zone_a_time_s = sim_time_s
+
+        # --- Zone B: DP scheduling (every replan_interval_s) ---
         need_replan = (
             self.replan_interval_s <= 0
             or self._cached_plan is None
@@ -227,6 +263,17 @@ class HierarchicalScheduler:
             )
             self._last_replan_time_s = sim_time_s
             self.replanned_last_call = True
+
+        # --- Zone C: merge point management (every step) ---
+        if self._merge_point_mgr is not None and zone_c_lane1_vehicles is not None:
+            cav_states = _collect_zone_c_cav_states(
+                vehicle_types=vehicle_types, traci=traci,
+            )
+            self.zone_c_actions = self._merge_point_mgr.update(
+                sim_time_s=sim_time_s,
+                cav_states=cav_states,
+                lane1_vehicles=zone_c_lane1_vehicles,
+            )
 
         return self._project_cached_plan(
             sim_time_s=sim_time_s,
@@ -265,3 +312,29 @@ class HierarchicalScheduler:
             target_cross_time_s=target_cross_time_s,
             eta_s=eta_s,
         )
+
+
+def _collect_zone_c_cav_states(
+    *,
+    vehicle_types: dict[str, str],
+    traci: Any,
+) -> dict[str, VehicleState]:
+    """Collect ramp-stream CAV states on main_h3 lane 0 for Zone C merge evaluation."""
+    cav_states: dict[str, VehicleState] = {}
+    lane_id = 'main_h3_0'
+    veh_ids = traci.lane.getLastStepVehicleIDs(lane_id)
+    for veh_id in veh_ids:
+        vtype = vehicle_types.get(veh_id, '')
+        if not vtype:
+            vtype = traci.vehicle.getTypeID(veh_id)
+        if vtype != 'cav':
+            continue
+        pos = float(traci.vehicle.getLanePosition(veh_id))
+        speed = float(traci.vehicle.getSpeed(veh_id))
+        cav_states[veh_id] = VehicleState(
+            edge_id='main_h3',
+            lane_index=0,
+            lane_pos_m=pos,
+            speed_mps=speed,
+        )
+    return cav_states

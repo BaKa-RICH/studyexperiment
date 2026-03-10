@@ -272,6 +272,7 @@ def run_experiment(
     hier_collector: HierarchicalStateCollector | None = None
     hier_scheduler: HierarchicalScheduler | None = None
     hier_vehicle_types: dict[str, str] = {}
+    hier_state = None
     if policy == 'dp':
         dp_scheduler = DPScheduler(
             delta_1_s=delta_1_s,
@@ -405,6 +406,8 @@ def run_experiment(
                         entry_info=state_collector.entry_info,
                         vehicle_types=hier_vehicle_types,
                         traci=traci,
+                        zone_a_info=hier_state.zone_a_info if hier_state is not None else None,
+                        zone_c_lane1_vehicles=hier_state.zone_c_lane1_vehicles if hier_state is not None else None,
                     )
                     plan_recomputed = bool(hier_scheduler.replanned_last_call)
                 else:
@@ -448,6 +451,8 @@ def run_experiment(
                             main_vmax_mps=main_vmax_mps,
                             ramp_vmax_mps=ramp_vmax_mps,
                             aux_vmax_mps=aux_vmax_mps,
+                            zone_a_actions=hier_scheduler.zone_a_actions,
+                            zone_c_actions=hier_scheduler.zone_c_actions,
                         )
                     else:
                         command = build_dp_command(

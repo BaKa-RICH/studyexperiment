@@ -30,6 +30,8 @@ def build_command(
     main_vmax_mps: float,
     ramp_vmax_mps: float,
     aux_vmax_mps: float | None = None,
+    zone_a_actions: dict[str, tuple[int, float]] | None = None,
+    zone_c_actions: dict[str, tuple[int, float]] | None = None,
 ) -> ControlCommand:
     set_speed_mps: dict[str, float] = {}
     for veh_id in plan.order:
@@ -50,4 +52,14 @@ def build_command(
         )
         v_des = d_to_merge / time_to_target
         set_speed_mps[veh_id] = max(0.0, min(v_des, stream_vmax))
-    return ControlCommand(set_speed_mps=set_speed_mps)
+
+    lane_change_targets: dict[str, tuple[int, float]] = {}
+    if zone_a_actions:
+        lane_change_targets.update(zone_a_actions)
+    if zone_c_actions:
+        lane_change_targets.update(zone_c_actions)
+
+    return ControlCommand(
+        set_speed_mps=set_speed_mps,
+        lane_change_targets=lane_change_targets,
+    )
