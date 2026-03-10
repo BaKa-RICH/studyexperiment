@@ -169,16 +169,21 @@ def _try_dp_mixed_with_fallback(
         )
     except (ValueError, KeyError) as exc:
         logger.warning(
-            'dp_mixed_schedule failed (%s), falling back to all-CAV dp_schedule',
+            'dp_mixed_schedule failed (%s), falling back to CAV-only dp_schedule',
             exc,
         )
-        t_min_all: dict[str, float] = {}
-        for veh_id in main_seq + ramp_seq:
-            t_min_all[veh_id] = eta_s[veh_id]
+        cav_main = [v for v in main_seq if veh_type_by_id.get(v) == 'cav']
+        cav_ramp = [v for v in ramp_seq if veh_type_by_id.get(v) == 'cav']
+        t_min_cav_only: dict[str, float] = {}
+        for veh_id in cav_main + cav_ramp:
+            t_min_cav_only[veh_id] = eta_s.get(veh_id, 0.0)
+        if not cav_main and not cav_ramp:
+            from ramp.scheduler.dp import ScheduleResult
+            return ScheduleResult([], {}, 0.0, 0.0, 0.0)
         return dp_schedule(
-            main_seq=main_seq,
-            ramp_seq=ramp_seq,
-            t_min_s=t_min_all,
+            main_seq=cav_main,
+            ramp_seq=cav_ramp,
+            t_min_s=t_min_cav_only,
             delta_1_s=delta_1_s,
             delta_2_s=delta_2_s,
         )
@@ -274,6 +279,13 @@ class HierarchicalScheduler:
                 cav_states=cav_states,
                 lane1_vehicles=zone_c_lane1_vehicles,
             )
+            if self.zone_c_actions:
+                logger.info(
+                    '[ZoneC] t=%.1f actions=%s merge_history_len=%d',
+                    sim_time_s,
+                    {vid: f'lane={a[0]},dur={a[1]:.1f}s' for vid, a in self.zone_c_actions.items()},
+                    len(self._merge_point_mgr.merge_history),
+                )
 
         return self._project_cached_plan(
             sim_time_s=sim_time_s,

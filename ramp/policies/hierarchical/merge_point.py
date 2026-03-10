@@ -33,7 +33,7 @@ class MergeState(Enum):
 
 @dataclass(frozen=True)
 class MergePointParams:
-    phi_s: float = 2.0
+    phi_s: float = 1.5
     t_lc_s: float = 3.0
     L_veh_m: float = 5.0
     s0_m: float = 5.0
@@ -257,11 +257,19 @@ class MergePointManager:
             if tracker.state == MergeState.APPROACHING:
                 if on_merge_lane and vs.lane_pos_m >= self.params.search_start_pos_m:
                     tracker.state = MergeState.SEARCHING
+                    logger.info(
+                        '[MergePoint] %s APPROACHING->SEARCHING pos=%.1fm speed=%.1fm/s',
+                        veh_id, vs.lane_pos_m, vs.speed_mps,
+                    )
 
             # Phase 2: MERGING -> completion / timeout
             if tracker.state == MergeState.MERGING:
                 if vs.lane_index == 1:
                     tracker.state = MergeState.MERGED
+                    logger.info(
+                        '[MergePoint] %s MERGED at t=%.1fs pos=%.1fm',
+                        veh_id, sim_time_s, vs.lane_pos_m,
+                    )
                     self.merge_history.append({
                         'veh_id': veh_id,
                         'merge_time_s': sim_time_s,
@@ -306,5 +314,19 @@ class MergePointManager:
                     tracker.merge_start_time_s = sim_time_s
                     tracker.merge_start_pos_m = vs.lane_pos_m
                     actions[veh_id] = (1, self.params.t_lc_s)
+                    logger.info(
+                        '[MergePoint] %s SEARCHING->MERGING feasible gap_f=%.1f gap_r=%.1f '
+                        'margin=%.1f fallback=%s pos=%.1fm',
+                        veh_id,
+                        result.gap_front_m if result.gap_front_m is not None else -1,
+                        result.gap_rear_m if result.gap_rear_m is not None else -1,
+                        result.safety_margin if result.safety_margin is not None else -1,
+                        result.is_fallback, vs.lane_pos_m,
+                    )
+                else:
+                    logger.debug(
+                        '[MergePoint] %s SEARCHING infeasible pos=%.1fm n_l1=%d',
+                        veh_id, vs.lane_pos_m, len(lane1_vehicles),
+                    )
 
         return actions

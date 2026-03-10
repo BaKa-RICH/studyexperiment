@@ -34,8 +34,8 @@ VTYPE_HDV = {
     "minGap": "2.5",
     "tau": "1.0",
     "maxSpeed": "25.0",
-    "sigma": "0.5",
-    "speedDev": "0.1",
+    "sigma": "0.7",
+    "speedDev": "0.15",
     "lcStrategic": "1.0",
 }
 

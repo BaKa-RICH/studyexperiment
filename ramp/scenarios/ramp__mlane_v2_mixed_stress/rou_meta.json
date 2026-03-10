@@ -1,0 +1,12 @@
+{
+  "seed": 42,
+  "cav_ratio": 0.6,
+  "main_vph": 2000,
+  "ramp_vph": 1000,
+  "duration": 300,
+  "arrival_mode": "uniform",
+  "total_vehicles": 747,
+  "actual_cav_count": 440,
+  "actual_hdv_count": 307,
+  "actual_cav_ratio": 0.589
+}
