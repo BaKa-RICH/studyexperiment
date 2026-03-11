@@ -12,6 +12,10 @@ class ControllerApplyResult:
     restored_ids: set[str] = field(default_factory=set)
     released_ids: set[str] = field(default_factory=set)
     commit_ids: set[str] = field(default_factory=set)
+    speed_command_ids: set[str] = field(default_factory=set)
+    lane_change_ids: set[str] = field(default_factory=set)
+    lane_change_mode_override_ids: set[str] = field(default_factory=set)
+    speed_mode_by_vehicle: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -57,24 +61,25 @@ class Controller:
 
     def _apply_lane_change_mode_overrides(
         self, command: ControlCommand, active_vehicle_ids: set[str]
-    ) -> None:
+    ) -> set[str]:
+        applied_ids: set[str] = set()
         for veh_id, mode in command.lane_change_mode_overrides.items():
             if veh_id not in active_vehicle_ids:
                 continue
             self.traci.vehicle.setLaneChangeMode(veh_id, int(mode))
+            applied_ids.add(veh_id)
+        return applied_ids
 
     def apply(
         self, *, command: ControlCommand, active_vehicle_ids: set[str]
     ) -> ControllerApplyResult:
         result = ControllerApplyResult()
-        self._apply_lane_change_mode_overrides(
+        result.lane_change_mode_override_ids = self._apply_lane_change_mode_overrides(
             command=command, active_vehicle_ids=active_vehicle_ids
         )
-        lane_change_ids = self._execute_lane_changes(
+        result.lane_change_ids = self._execute_lane_changes(
             command=command, active_vehicle_ids=active_vehicle_ids
         )
-        if lane_change_ids:
-            pass
         current_controlled = set(command.set_speed_mps)
         for veh_id, speed_mps in command.set_speed_mps.items():
             if veh_id not in active_vehicle_ids:
@@ -83,12 +88,14 @@ class Controller:
                 continue
             if self._takeover(veh_id):
                 result.takeover_ids.add(veh_id)
+            result.speed_command_ids.add(veh_id)
             if self._is_commit_vehicle(veh_id):
                 # Vehicle has entered the merge junction internal edge; do not re-brake it.
                 self.traci.vehicle.setSpeed(veh_id, -1)
                 result.commit_ids.add(veh_id)
             else:
                 self.traci.vehicle.setSpeed(veh_id, speed_mps)
+            result.speed_mode_by_vehicle[veh_id] = int(self.traci.vehicle.getSpeedMode(veh_id))
 
         to_release = (self.controlled_vehicle_ids - current_controlled) | set(command.release_ids)
         for veh_id in to_release:

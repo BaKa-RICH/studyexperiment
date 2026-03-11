@@ -17,6 +17,18 @@ from ramp.policies.hierarchical.scheduler import HierarchicalScheduler
 from ramp.policies.hierarchical.state_collector_ext import HierarchicalStateCollector
 from ramp.policies.no_control.command_builder import build_command as build_no_control_command
 from ramp.policies.no_control.scheduler import compute_plan as compute_no_control_plan
+from ramp.experiments.evidence_chain import (
+    CONTRACT_FIELDS,
+    CONTROL_FIELDS,
+    FEEDBACK_FIELDS,
+    SPEED_MISMATCH_THRESHOLD_MPS,
+    attach_actual_neighbors,
+    build_contract_row,
+    build_evidence_metrics,
+    expected_merge_position_m,
+    merge_window_half_span_s,
+    resolve_merge_policy,
+)
 from ramp.runtime.controller import Controller
 from ramp.runtime.simulation_driver import SimulationDriver
 from ramp.runtime.state_collector import StateCollector
@@ -234,12 +246,18 @@ def run_experiment(
         'release_flag',
     ]
     event_fields = ['time', 'event', 'veh_id', 'detail']
+    control_fields = CONTROL_FIELDS
+    contract_fields = CONTRACT_FIELDS
+    feedback_fields = FEEDBACK_FIELDS
 
     trace_path = out_path / 'control_zone_trace.csv'
     collisions_path = out_path / 'collisions.csv'
     plans_path = out_path / 'plans.csv'
     commands_path = out_path / 'commands.csv'
     events_path = out_path / 'events.csv'
+    control_evidence_path = out_path / 'control_evidence.csv'
+    contract_evidence_path = out_path / 'contract_evidence.csv'
+    feedback_evidence_path = out_path / 'feedback_evidence.csv'
     metrics_path = out_path / 'metrics.json'
     config_path = out_path / 'config.json'
     plan_fields = [
@@ -261,11 +279,39 @@ def run_experiment(
     active_vehicle_ids: set[str] = set()
     prev_control_zone_ids: set[str] = set()
     prev_crossed_merge: set[str] = set()
+    prev_lane_id_by_vehicle: dict[str, str] = {}
     plan_snapshots: list[tuple[float, list[str], dict[str, float]]] = []
     speed_tracking_abs_errors: list[float] = []
+    planned_actual_time_errors: list[float] = []
+    planned_actual_position_errors: list[float] = []
     ttc_longitudinal_samples: list[float] = []
     ttc_merge_conflict_samples: list[float] = []
+    control_event_index = 0
+    contract_index = 0
+    feedback_event_index = 0
+    controlled_cav_steps = 0
+    covered_control_cav_steps = 0
+    autonomous_lane_change_detected_count = 0
+    speed_mismatch_detected_count = 0
+    zone_a_event_count = 0
+    zone_c_event_count = 0
+    zone_c_chain_complete_count = 0
+    zone_c_chain_status: dict[str, bool] = {}
+    contract_vehicle_ids: set[str] = set()
+    feedback_vehicle_ids: set[str] = set()
+    latest_contract_by_vehicle: dict[str, str] = {}
+    contract_by_id: dict[str, dict[str, float | str]] = {}
+    feedback_rows: list[dict[str, str | float | int]] = []
+    cross_feedback_indices: list[int] = []
     policy_variant_name = policy_variant if policy_variant else policy
+    merge_policy = resolve_merge_policy(policy=policy, policy_variant=policy_variant_name)
+    merge_window_half_span_value = merge_window_half_span_s(
+        policy=policy,
+        step_length_s=step_length,
+        fifo_gap_s=fifo_gap_s,
+        delta_1_s=delta_1_s,
+        delta_2_s=delta_2_s,
+    )
     hier_control_mode = 'E-ctrl-2' if policy == 'hierarchical' else control_mode
     state_collector = StateCollector(
         control_zone_length_m=control_zone_length_m,
@@ -313,7 +359,11 @@ def run_experiment(
         'w', newline='', encoding='utf-8'
     ) as collision_fp, plans_path.open('w', newline='', encoding='utf-8') as plan_fp, commands_path.open(
         'w', newline='', encoding='utf-8'
-    ) as command_fp, events_path.open('w', newline='', encoding='utf-8') as event_fp:
+    ) as command_fp, events_path.open('w', newline='', encoding='utf-8') as event_fp, control_evidence_path.open(
+        'w', newline='', encoding='utf-8'
+    ) as control_fp, contract_evidence_path.open('w', newline='', encoding='utf-8') as contract_fp, feedback_evidence_path.open(
+        'w', newline='', encoding='utf-8'
+    ) as feedback_fp:
         trace_writer = csv.DictWriter(trace_fp, fieldnames=trace_fields, lineterminator='\n')
         collision_writer = csv.DictWriter(
             collision_fp, fieldnames=collision_fields, lineterminator='\n'
@@ -321,11 +371,17 @@ def run_experiment(
         plan_writer = csv.DictWriter(plan_fp, fieldnames=plan_fields, lineterminator='\n')
         command_writer = csv.DictWriter(command_fp, fieldnames=command_fields, lineterminator='\n')
         event_writer = csv.DictWriter(event_fp, fieldnames=event_fields, lineterminator='\n')
+        control_writer = csv.DictWriter(control_fp, fieldnames=control_fields, lineterminator='\n')
+        contract_writer = csv.DictWriter(contract_fp, fieldnames=contract_fields, lineterminator='\n')
+        feedback_writer = csv.DictWriter(feedback_fp, fieldnames=feedback_fields, lineterminator='\n')
         trace_writer.writeheader()
         collision_writer.writeheader()
         plan_writer.writeheader()
         command_writer.writeheader()
         event_writer.writeheader()
+        control_writer.writeheader()
+        contract_writer.writeheader()
+        feedback_writer.writeheader()
 
         try:
             for _ in range(max_steps):
@@ -357,6 +413,11 @@ def run_experiment(
                 entered_this_step = control_zone_ids - prev_control_zone_ids
                 left_this_step = prev_control_zone_ids - control_zone_ids
                 crossed_this_step = state_collector.crossed_merge - prev_crossed_merge
+                lane_changed_by_vehicle: dict[str, bool] = {}
+                for veh_id, vehicle_state in control_zone_state.items():
+                    lane_id = str(vehicle_state['lane_id'])
+                    previous_lane_id = prev_lane_id_by_vehicle.get(veh_id, lane_id)
+                    lane_changed_by_vehicle[veh_id] = previous_lane_id != lane_id
 
                 for veh_id in sorted(entered_this_step):
                     stream = str(state_collector.entry_info.get(veh_id, {}).get('stream', 'unknown'))
@@ -377,6 +438,57 @@ def run_experiment(
                             'detail': f'merge_edge={merge_edge}',
                         }
                     )
+                    feedback_event_index += 1
+                    contract_id = latest_contract_by_vehicle.get(veh_id, '')
+                    contract_snapshot = contract_by_id.get(contract_id, {})
+                    actual_merge_position_m = float(traci.vehicle.getLanePosition(veh_id))
+                    expected_merge_time_s = (
+                        float(contract_snapshot['expected_merge_time_s'])
+                        if 'expected_merge_time_s' in contract_snapshot
+                        else sim_time
+                    )
+                    expected_merge_position_value = (
+                        float(contract_snapshot['expected_merge_position_m'])
+                        if 'expected_merge_position_m' in contract_snapshot
+                        else actual_merge_position_m
+                    )
+                    planned_actual_time_error_s: float | str = ''
+                    planned_actual_position_error_m: float | str = ''
+                    if contract_id:
+                        planned_actual_time_error_s = sim_time - expected_merge_time_s
+                        planned_actual_position_error_m = (
+                            actual_merge_position_m - expected_merge_position_value
+                        )
+                        feedback_vehicle_ids.add(veh_id)
+                        planned_actual_time_errors.append(abs(planned_actual_time_error_s))
+                        planned_actual_position_errors.append(
+                            abs(planned_actual_position_error_m)
+                        )
+                    fallback_reason = ''
+                    if veh_id in zone_c_chain_status and not zone_c_chain_status[veh_id]:
+                        fallback_reason = 'zone_c_chain_incomplete'
+                        zone_c_chain_status[veh_id] = True
+                        zone_c_chain_complete_count += 1
+                    feedback_rows.append(
+                        {
+                            'time': sim_time,
+                            'event_id': f'feedback_{feedback_event_index:08d}',
+                            'contract_id': contract_id,
+                            'ego_vehicle_id': veh_id,
+                            'execution_state': 'merge_cross',
+                            'gap_found': '',
+                            'gap_reject_reason': '',
+                            'actual_merge_time_s': sim_time,
+                            'actual_merge_position_m': actual_merge_position_m,
+                            'actual_predecessor_id': '',
+                            'actual_follower_id': '',
+                            'planned_actual_time_error_s': planned_actual_time_error_s,
+                            'planned_actual_position_error_m': planned_actual_position_error_m,
+                            'fallback_reason': fallback_reason,
+                            'replan_required': 0,
+                        }
+                    )
+                    cross_feedback_indices.append(len(feedback_rows) - 1)
                 for veh_id in sorted(left_this_step):
                     stream = str(state_collector.entry_info.get(veh_id, {}).get('stream', 'unknown'))
                     event_writer.writerow(
@@ -428,6 +540,8 @@ def run_experiment(
                 else:
                     plan = compute_no_control_plan(sim_time_s=sim_time)
 
+                zone_a_action_ids: set[str] = set()
+                zone_c_action_ids: set[str] = set()
                 if policy in {'fifo', 'dp', 'hierarchical'}:
                     if plan is None:
                         raise RuntimeError(f'Policy {policy} must return a Plan')
@@ -469,6 +583,8 @@ def run_experiment(
                             zone_a_actions=hier_scheduler.zone_a_actions,
                             zone_c_actions=hier_scheduler.zone_c_actions,
                         )
+                        zone_a_action_ids = set(hier_scheduler.zone_a_actions)
+                        zone_c_action_ids = set(hier_scheduler.zone_c_actions)
                     else:
                         command = build_dp_command(
                             sim_time_s=sim_time,
@@ -478,6 +594,39 @@ def run_experiment(
                             main_vmax_mps=main_vmax_mps,
                             ramp_vmax_mps=ramp_vmax_mps,
                             aux_vmax_mps=aux_vmax_mps,
+                        )
+                    zone_a_event_count += len(zone_a_action_ids)
+                    zone_c_event_count += len(zone_c_action_ids)
+                    for veh_id in sorted(zone_c_action_ids):
+                        if veh_id not in zone_c_chain_status:
+                            zone_c_chain_status[veh_id] = False
+                        feedback_event_index += 1
+                        feedback_rows.append(
+                            {
+                                'time': sim_time,
+                                'event_id': f'feedback_{feedback_event_index:08d}',
+                                'contract_id': latest_contract_by_vehicle.get(veh_id, ''),
+                                'ego_vehicle_id': veh_id,
+                                'execution_state': 'lc_command_issued',
+                                'gap_found': 1,
+                                'gap_reject_reason': '',
+                                'actual_merge_time_s': '',
+                                'actual_merge_position_m': '',
+                                'actual_predecessor_id': '',
+                                'actual_follower_id': '',
+                                'planned_actual_time_error_s': '',
+                                'planned_actual_position_error_m': '',
+                                'fallback_reason': '',
+                                'replan_required': int(plan_recomputed),
+                            }
+                        )
+                        event_writer.writerow(
+                            {
+                                'time': sim_time,
+                                'event': 'zone_c_lc_command',
+                                'veh_id': veh_id,
+                                'detail': '',
+                            }
                         )
                     prev_target: float | None = None
                     for order_index, veh_id in enumerate(schedule_order, start=1):
@@ -498,6 +647,40 @@ def run_experiment(
                             desired_speed_by_vehicle[veh_id] = v_des
                         else:
                             v_des = ''
+
+                        contract_index += 1
+                        target_predecessor_id = (
+                            schedule_order[order_index - 2] if order_index > 1 else ''
+                        )
+                        target_follower_id = (
+                            schedule_order[order_index] if order_index < len(schedule_order) else ''
+                        )
+                        expected_merge_position = expected_merge_position_m(
+                            lane_pos_m=float(vehicle_state['lane_pos']),
+                            d_to_merge_m=d_to_merge,
+                            merge_policy=merge_policy,
+                        )
+                        desired_merge_speed = (
+                            float(v_des) if isinstance(v_des, float) else speed
+                        )
+                        contract_id, contract_row, contract_snapshot = build_contract_row(
+                            contract_index=contract_index,
+                            sim_time=sim_time,
+                            zoneb_algorithm=policy,
+                            merge_policy=merge_policy,
+                            veh_id=veh_id,
+                            sequence_rank=order_index,
+                            target_predecessor_id=target_predecessor_id,
+                            target_follower_id=target_follower_id,
+                            target_cross_time=target_cross_time,
+                            merge_window_half_span_s=merge_window_half_span_value,
+                            expected_merge_position_m_value=expected_merge_position,
+                            desired_merge_speed_mps=desired_merge_speed,
+                        )
+                        contract_writer.writerow(contract_row)
+                        contract_by_id[contract_id] = contract_snapshot
+                        latest_contract_by_vehicle[veh_id] = contract_id
+                        contract_vehicle_ids.add(veh_id)
 
                         plan_writer.writerow(
                             {
@@ -550,6 +733,154 @@ def run_experiment(
                             'release_flag': 1,
                         }
                     )
+                lane_change_command_ids = set(command.lane_change_targets)
+                for veh_id in sorted(command.set_speed_mps):
+                    if veh_id not in control_zone_state:
+                        continue
+                    vehicle_state = control_zone_state[veh_id]
+                    if traci.vehicle.getTypeID(veh_id) == 'hdv':
+                        continue
+                    controlled_cav_steps += 1
+                    covered_control_cav_steps += 1
+                    commanded_speed = float(command.set_speed_mps[veh_id])
+                    actual_speed = float(vehicle_state['speed'])
+                    speed_error = actual_speed - commanded_speed
+                    speed_mode_applied = controller_result.speed_mode_by_vehicle.get(
+                        veh_id, int(traci.vehicle.getSpeedMode(veh_id))
+                    )
+                    lane_change_command_issued = int(veh_id in lane_change_command_ids)
+                    lane_change_mode_applied = int(traci.vehicle.getLaneChangeMode(veh_id))
+                    autonomous_lane_change_detected = int(
+                        lane_changed_by_vehicle.get(veh_id, False)
+                        and lane_change_command_issued == 0
+                    )
+                    if autonomous_lane_change_detected == 1:
+                        autonomous_lane_change_detected_count += 1
+                        event_writer.writerow(
+                            {
+                                'time': sim_time,
+                                'event': 'autonomous_lane_change_anomaly',
+                                'veh_id': veh_id,
+                                'detail': 'lane_changed_without_command',
+                            }
+                        )
+                    if abs(speed_error) >= SPEED_MISMATCH_THRESHOLD_MPS:
+                        speed_mismatch_detected_count += 1
+                        event_writer.writerow(
+                            {
+                                'time': sim_time,
+                                'event': 'speed_mismatch_anomaly',
+                                'veh_id': veh_id,
+                                'detail': (
+                                    f'commanded={commanded_speed:.3f},'
+                                    f'actual={actual_speed:.3f},'
+                                    f'error={speed_error:.3f}'
+                                ),
+                            }
+                        )
+                    control_event_index += 1
+                    control_writer.writerow(
+                        {
+                            'time': sim_time,
+                            'event_id': f'control_{control_event_index:08d}',
+                            'contract_id': latest_contract_by_vehicle.get(veh_id, ''),
+                            'veh_id': veh_id,
+                            'commanded_speed': commanded_speed,
+                            'actual_speed': actual_speed,
+                            'speed_error': speed_error,
+                            'speed_mode_applied': speed_mode_applied,
+                            'lane_change_command_issued': lane_change_command_issued,
+                            'lane_change_mode_applied': lane_change_mode_applied,
+                            'autonomous_lane_change_detected': autonomous_lane_change_detected,
+                            'controlled_cav_step': 1,
+                        }
+                    )
+                for veh_id in sorted(lane_change_command_ids - set(command.set_speed_mps)):
+                    if veh_id not in control_zone_state:
+                        continue
+                    if traci.vehicle.getTypeID(veh_id) == 'hdv':
+                        continue
+                    control_event_index += 1
+                    control_writer.writerow(
+                        {
+                            'time': sim_time,
+                            'event_id': f'control_{control_event_index:08d}',
+                            'contract_id': latest_contract_by_vehicle.get(veh_id, ''),
+                            'veh_id': veh_id,
+                            'commanded_speed': '',
+                            'actual_speed': float(control_zone_state[veh_id]['speed']),
+                            'speed_error': '',
+                            'speed_mode_applied': int(traci.vehicle.getSpeedMode(veh_id)),
+                            'lane_change_command_issued': 1,
+                            'lane_change_mode_applied': int(traci.vehicle.getLaneChangeMode(veh_id)),
+                            'autonomous_lane_change_detected': 0,
+                            'controlled_cav_step': 0,
+                        }
+                    )
+                for veh_id, lane_changed in lane_changed_by_vehicle.items():
+                    if not lane_changed:
+                        continue
+                    previous_lane_id = prev_lane_id_by_vehicle.get(veh_id, '')
+                    current_lane_id = str(control_zone_state[veh_id]['lane_id'])
+                    if (
+                        previous_lane_id.startswith('main_h3_0')
+                        and current_lane_id.startswith('main_h3_1')
+                        and veh_id in zone_c_chain_status
+                        and not zone_c_chain_status[veh_id]
+                    ):
+                        zone_c_chain_status[veh_id] = True
+                        zone_c_chain_complete_count += 1
+                        contract_id = latest_contract_by_vehicle.get(veh_id, '')
+                        contract_snapshot = contract_by_id.get(contract_id, {})
+                        actual_merge_position_m = float(control_zone_state[veh_id]['lane_pos'])
+                        planned_actual_time_error_s: float | str = ''
+                        planned_actual_position_error_m: float | str = ''
+                        if contract_id:
+                            expected_merge_time_s = float(
+                                contract_snapshot.get('expected_merge_time_s', sim_time)
+                            )
+                            expected_merge_position_value = float(
+                                contract_snapshot.get(
+                                    'expected_merge_position_m', actual_merge_position_m
+                                )
+                            )
+                            planned_actual_time_error_s = sim_time - expected_merge_time_s
+                            planned_actual_position_error_m = (
+                                actual_merge_position_m - expected_merge_position_value
+                            )
+                            planned_actual_time_errors.append(abs(planned_actual_time_error_s))
+                            planned_actual_position_errors.append(
+                                abs(planned_actual_position_error_m)
+                            )
+                            feedback_vehicle_ids.add(veh_id)
+                        feedback_event_index += 1
+                        feedback_rows.append(
+                            {
+                                'time': sim_time,
+                                'event_id': f'feedback_{feedback_event_index:08d}',
+                                'contract_id': contract_id,
+                                'ego_vehicle_id': veh_id,
+                                'execution_state': 'lc_complete',
+                                'gap_found': 1,
+                                'gap_reject_reason': '',
+                                'actual_merge_time_s': sim_time,
+                                'actual_merge_position_m': actual_merge_position_m,
+                                'actual_predecessor_id': '',
+                                'actual_follower_id': '',
+                                'planned_actual_time_error_s': planned_actual_time_error_s,
+                                'planned_actual_position_error_m': planned_actual_position_error_m,
+                                'fallback_reason': '',
+                                'replan_required': int(plan_recomputed),
+                            }
+                        )
+                        event_writer.writerow(
+                            {
+                                'time': sim_time,
+                                'event': 'zone_c_lc_complete',
+                                'veh_id': veh_id,
+                                'detail': '',
+                            }
+                        )
                 for veh_id in sorted(controller_result.takeover_ids):
                     event_writer.writerow(
                         {
@@ -598,11 +929,23 @@ def run_experiment(
                         speed_now = float(control_zone_state[veh_id]['speed'])
                         speed_tracking_abs_errors.append(abs(speed_now - v_des))
 
+                for veh_id, vehicle_state in control_zone_state.items():
+                    prev_lane_id_by_vehicle[veh_id] = str(vehicle_state['lane_id'])
                 prev_control_zone_ids = control_zone_ids
                 prev_crossed_merge = set(state_collector.crossed_merge)
         finally:
             controller.release_all(active_vehicle_ids=active_vehicle_ids)
             sim_driver.close()
+
+    attach_actual_neighbors(
+        feedback_rows=feedback_rows,
+        cross_feedback_indices=cross_feedback_indices,
+    )
+
+    with feedback_evidence_path.open('a', newline='', encoding='utf-8') as feedback_fp:
+        feedback_writer = csv.DictWriter(feedback_fp, fieldnames=feedback_fields, lineterminator='\n')
+        for row in feedback_rows:
+            feedback_writer.writerow(row)
 
     pending_unfinished = {
         veh_id
@@ -690,11 +1033,28 @@ def run_experiment(
         merge_conflict_samples=ttc_merge_conflict_samples,
         step_length_s=step_length,
     )
+    evidence_metrics = build_evidence_metrics(
+        duration_s=duration_s,
+        controlled_cav_steps=controlled_cav_steps,
+        covered_control_cav_steps=covered_control_cav_steps,
+        autonomous_lane_change_detected_count=autonomous_lane_change_detected_count,
+        speed_mismatch_detected_count=speed_mismatch_detected_count,
+        zone_a_event_count=zone_a_event_count,
+        zone_c_event_count=zone_c_event_count,
+        zone_c_chain_status=zone_c_chain_status,
+        zone_c_chain_complete_count=zone_c_chain_complete_count,
+        contract_vehicle_ids=contract_vehicle_ids,
+        feedback_vehicle_ids=feedback_vehicle_ids,
+        feedback_rows=feedback_rows,
+        contract_by_id=contract_by_id,
+        planned_actual_time_errors=planned_actual_time_errors,
+        planned_actual_position_errors=planned_actual_position_errors,
+    )
 
     metrics = {
         'policy_name': policy,
         'policy_variant': policy_variant_name,
-        'metrics_schema_version': 'v2_ttc',
+        'metrics_schema_version': 'v3_evidence_chain',
         'ttc_warmup_s': ttc_warmup_s,
         'merge_success_rate': merge_success_rate,
         'avg_delay_at_merge_s': avg_delay,
@@ -712,6 +1072,7 @@ def run_experiment(
         'consistency_plan_churn_rate': consistency_plan_churn_rate,
     }
     metrics.update(ttc_metrics)
+    metrics.update(evidence_metrics)
     metrics_path.write_text(json.dumps(metrics, indent=2), encoding='utf-8')
 
     config = {

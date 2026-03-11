@@ -97,6 +97,25 @@ def aggregate_groups(*, records: list[RunRecord]) -> list[dict[str, float | int 
             'median_ttc_any_lt_1_5s_ratio': _median_metric(
                 group_records, 'ttc_any_lt_1_5s_ratio'
             ),
+            'median_control_command_actual_coverage_rate': _median_metric(
+                group_records, 'control_command_actual_coverage_rate'
+            ),
+            'median_zone_c_action_chain_complete_rate': _median_metric(
+                group_records, 'zone_c_action_chain_complete_rate'
+            ),
+            'median_autonomous_merge_leakage_rate': _median_metric(
+                group_records, 'autonomous_merge_leakage_rate'
+            ),
+            'median_contract_realization_rate': _median_metric(
+                group_records, 'contract_realization_rate'
+            ),
+            'median_merge_window_hit_rate': _median_metric(
+                group_records, 'merge_window_hit_rate'
+            ),
+            'median_predecessor_follower_match_rate': _median_metric(
+                group_records, 'predecessor_follower_match_rate'
+            ),
+            'median_replan_rate': _median_metric(group_records, 'replan_rate'),
         }
         rows.append(row)
     return rows
