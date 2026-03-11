@@ -170,6 +170,41 @@ done
 |5|fifo|600|7.456|0|12|1.861|5.628|2|
 |5|dp|660|2.244|0|0|0.038|0.099|0|
 
+### 1.7 TTC 联合重评矩阵（v1）
+
+说明：
+- 本节用于 `TTC + delay + throughput` 联合评价，统一使用新字段 `policy_variant` 与 `ttc_*`。
+- **不要**用旧目录（历史 `E-ctrl-1/E-ctrl-2` 混杂）直接做前车 TTC 主结论。
+- 本轮闭环重评采用 `duration-s=120` 的快速矩阵；若用于论文终稿统计，可将同一命令切换到 `duration-s=300` 重跑。
+
+```bash
+cd /home/liangyunxuan/src/Sumo-Carla-simulation-for-Vehicle-Road-Cloud-Integeration
+
+BASE=output/ttc_reeval120/seed1
+
+# mixed: 4 策略
+uv run python -m ramp.experiments.run --scenario ramp__mlane_v2_mixed --policy no_control   --policy-variant no_control   --duration-s 120 --step-length 0.1 --seed 1 --out-dir "${BASE}/ramp__mlane_v2_mixed/no_control"
+uv run python -m ramp.experiments.run --scenario ramp__mlane_v2_mixed --policy fifo         --policy-variant fifo         --duration-s 120 --step-length 0.1 --seed 1 --out-dir "${BASE}/ramp__mlane_v2_mixed/fifo"
+uv run python -m ramp.experiments.run --scenario ramp__mlane_v2_mixed --policy dp           --policy-variant dp           --duration-s 120 --step-length 0.1 --seed 1 --out-dir "${BASE}/ramp__mlane_v2_mixed/dp"
+uv run python -m ramp.experiments.run --scenario ramp__mlane_v2_mixed --policy hierarchical --policy-variant proposed_full --duration-s 120 --step-length 0.1 --seed 1 --out-dir "${BASE}/ramp__mlane_v2_mixed/hierarchical"
+
+# high/stress: 核心对比
+uv run python -m ramp.experiments.run --scenario ramp__mlane_v2_mixed_hf     --policy no_control   --policy-variant no_control   --duration-s 120 --step-length 0.1 --seed 1 --out-dir "${BASE}/ramp__mlane_v2_mixed_hf/no_control"
+uv run python -m ramp.experiments.run --scenario ramp__mlane_v2_mixed_hf     --policy hierarchical --policy-variant proposed_full --duration-s 120 --step-length 0.1 --seed 1 --out-dir "${BASE}/ramp__mlane_v2_mixed_hf/hierarchical"
+uv run python -m ramp.experiments.run --scenario ramp__mlane_v2_mixed_stress --policy no_control   --policy-variant no_control   --duration-s 120 --step-length 0.1 --seed 1 --out-dir "${BASE}/ramp__mlane_v2_mixed_stress/no_control"
+uv run python -m ramp.experiments.run --scenario ramp__mlane_v2_mixed_stress --policy hierarchical --policy-variant proposed_full --duration-s 120 --step-length 0.1 --seed 1 --out-dir "${BASE}/ramp__mlane_v2_mixed_stress/hierarchical"
+
+# 联合汇总
+uv run python -m ramp.experiments.summarize_metrics \
+  --input-dir "${BASE}" \
+  --out-json "${BASE}/summary.json" \
+  --out-md "${BASE}/summary.md"
+```
+
+最小验收：
+- `metrics.json` 包含 `ttc_longitudinal_*`、`ttc_merge_conflict_*`、`ttc_any_*`。
+- `summary.md` 生成并可读，按 `scenario + policy_variant` 聚合。
+
 ## 2. 额外验证（从 0 到现在都做过什么）
 
 除了 “1. 必跑验证” 之外，实践中额外做过：

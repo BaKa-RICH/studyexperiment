@@ -47,9 +47,30 @@ SUMO_GUI=1 uv run python -m ramp.experiments.run --scenario ramp_min_v1 --policy
 - `plans.csv`：每个仿真步的计划快照（passing order + 每车 `target_cross_time`；字段包括 `order_index/natural_eta/target_cross_time/gap_from_prev/v_des`）
 - `commands.csv`：每个仿真步实际下发的控制命令快照（字段包括 `v_cmd_mps/release_flag`，用于核对“计划有没有真的下发到控制层”）
 - `events.csv`：稀疏事件流（字段 `time,event,veh_id,detail`；用于和 GUI 做时间对齐排查）
-- `metrics.json`：汇总指标（吞吐/延误/成功率/碰撞/停车次数 + 一致性指标 `consistency_*`）
+- `metrics.json`：汇总指标（吞吐/延误/成功率/碰撞/停车次数 + 一致性指标 `consistency_*` + TTC 联合重评指标）
 - `collisions.csv`：碰撞事件（字段见表头；0 碰撞也会生成表头）
-- `config.json`：本次 run 的参数快照（用于复现；包含 `scenario/policy/duration/step-length/seed/merge_edge/vmax/delta/.../output_dir`）
+- `config.json`：本次 run 的参数快照（用于复现；包含 `scenario/policy/policy_variant/duration/step-length/seed/merge_edge/vmax/delta/ttc_warmup_s/.../output_dir`）
+
+TTC 新增核心字段（`metrics.json`）：
+- `ttc_longitudinal_*`：同车道前车 TTC 统计（`min/p05/sample_count/lt_3_0s_ratio/lt_1_5s_ratio`）
+- `ttc_merge_conflict_*`：主路-匝道冲突 TTC 统计（同上）
+- `ttc_any_*`：双口径合并后的总体 TTC 统计（同上）
+- `policy_variant` / `metrics_schema_version` / `ttc_calc_version` / `ttc_scope`：重评价分组与口径元数据
+
+## TTC 联合重评（批量汇总）
+
+先按实验矩阵跑出多个输出目录（建议为每次运行显式设置 `--out-dir` 和 `--policy-variant`），再执行：
+
+```bash
+cd /home/liangyunxuan/src/Sumo-Carla-simulation-for-Vehicle-Road-Cloud-Integeration
+
+uv run python -m ramp.experiments.summarize_metrics \
+  --input-dir output/ttc_reeval \
+  --out-json output/ttc_reeval/summary.json \
+  --out-md output/ttc_reeval/summary.md
+```
+
+该汇总会输出每个 `scenario + policy_variant` 的中位数指标，并给出 `TTC + delay + throughput` 三维联合结论。
 
 ## 验证（必须跑）
 

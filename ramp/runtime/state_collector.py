@@ -92,6 +92,7 @@ def _distance_to_merge(veh_id: str, merge_edge: str, traci) -> float | None:
 class CollectedState:
     active_vehicle_ids: set[str]
     control_zone_state: dict[str, dict[str, float | str]]
+    ttc_observation_state: dict[str, dict[str, float | str]]
 
 
 @dataclass(slots=True)
@@ -119,6 +120,7 @@ class StateCollector:
     def collect(self, *, sim_time: float, traci: Any) -> CollectedState:
         active_vehicle_ids = set(traci.vehicle.getIDList())
         control_zone_state: dict[str, dict[str, float | str]] = {}
+        ttc_observation_state: dict[str, dict[str, float | str]] = {}
 
         for veh_id in sorted(active_vehicle_ids):
             route_edges = tuple(traci.vehicle.getRoute(veh_id))
@@ -136,6 +138,20 @@ class StateCollector:
                 continue
 
             lane_id = traci.vehicle.getLaneID(veh_id)
+            lane_pos = float(traci.vehicle.getLanePosition(veh_id))
+            speed = float(traci.vehicle.getSpeed(veh_id))
+            accel = float(traci.vehicle.getAcceleration(veh_id))
+            length = float(traci.vehicle.getLength(veh_id))
+            ttc_observation_state[veh_id] = {
+                'stream': stream,
+                'edge_id': road_id,
+                'lane_id': lane_id,
+                'lane_pos': lane_pos,
+                'd_to_merge': d_to_merge,
+                'speed': speed,
+                'accel': accel,
+                'length': length,
+            }
 
             if self.control_mode == 'E-ctrl-1' and not road_id.startswith(':'):
                 lane_index = int(lane_id.split('_')[-1]) if '_' in lane_id else -1
@@ -168,7 +184,6 @@ class StateCollector:
                     self.fifo_target_time[veh_id] = target_cross_time
                     self.fifo_last_assigned_target = target_cross_time
 
-            speed = float(traci.vehicle.getSpeed(veh_id))
             is_stopped = speed < 0.1
             if is_stopped and not self.prev_stopped.get(veh_id, False):
                 self.stop_count += 1
@@ -178,13 +193,14 @@ class StateCollector:
                 'stream': stream,
                 'edge_id': road_id,
                 'lane_id': lane_id,
-                'lane_pos': float(traci.vehicle.getLanePosition(veh_id)),
+                'lane_pos': lane_pos,
                 'd_to_merge': d_to_merge,
                 'speed': speed,
-                'accel': float(traci.vehicle.getAcceleration(veh_id)),
+                'accel': accel,
             }
 
         return CollectedState(
             active_vehicle_ids=active_vehicle_ids,
             control_zone_state=control_zone_state,
+            ttc_observation_state=ttc_observation_state,
         )

@@ -1,6 +1,7 @@
 import argparse
 import csv
 import json
+import logging
 import os
 import shutil
 import sys
@@ -19,6 +20,7 @@ from ramp.policies.no_control.scheduler import compute_plan as compute_no_contro
 from ramp.runtime.controller import Controller
 from ramp.runtime.simulation_driver import SimulationDriver
 from ramp.runtime.state_collector import StateCollector
+from ramp.runtime.ttc import build_ttc_metrics, collect_ttc_samples
 
 
 def _ensure_sumo_tools_on_path() -> None:
@@ -151,6 +153,8 @@ def run_experiment(
     ramp_lc_target_lane: int = 1,
     aux_vmax_mps: float = 25.0,
     cav_ratio: float = 0.5,
+    policy_variant: str | None = None,
+    ttc_warmup_s: float = 0.0,
 ) -> int:
     if duration_s <= 0:
         raise ValueError('duration-s must be > 0')
@@ -166,6 +170,8 @@ def run_experiment(
         raise ValueError('delta_1_s and delta_2_s must be > 0')
     if dp_replan_interval_s <= 0:
         raise ValueError('dp-replan-interval-s must be > 0')
+    if ttc_warmup_s < 0:
+        raise ValueError('ttc-warmup-s must be >= 0')
     if policy not in {'no_control', 'fifo', 'dp', 'hierarchical'}:
         raise ValueError(f'Unsupported policy: {policy}')
 
@@ -257,6 +263,9 @@ def run_experiment(
     prev_crossed_merge: set[str] = set()
     plan_snapshots: list[tuple[float, list[str], dict[str, float]]] = []
     speed_tracking_abs_errors: list[float] = []
+    ttc_longitudinal_samples: list[float] = []
+    ttc_merge_conflict_samples: list[float] = []
+    policy_variant_name = policy_variant if policy_variant else policy
     hier_control_mode = 'E-ctrl-2' if policy == 'hierarchical' else control_mode
     state_collector = StateCollector(
         control_zone_length_m=control_zone_length_m,
@@ -337,6 +346,12 @@ def run_experiment(
                     collected_state = state_collector.collect(sim_time=sim_time, traci=traci)
                 active_vehicle_ids = collected_state.active_vehicle_ids
                 control_zone_state = collected_state.control_zone_state
+                if sim_time >= ttc_warmup_s:
+                    longitudinal_samples, merge_conflict_samples = collect_ttc_samples(
+                        ttc_observation_state=collected_state.ttc_observation_state
+                    )
+                    ttc_longitudinal_samples.extend(longitudinal_samples)
+                    ttc_merge_conflict_samples.extend(merge_conflict_samples)
                 controller.apply_lane_change_modes(control_zone_state=control_zone_state)
                 control_zone_ids = set(control_zone_state)
                 entered_this_step = control_zone_ids - prev_control_zone_ids
@@ -670,9 +685,17 @@ def run_experiment(
     consistency_plan_churn_rate = (
         sum(churn_samples) / len(churn_samples) if churn_samples else 0.0
     )
+    ttc_metrics = build_ttc_metrics(
+        longitudinal_samples=ttc_longitudinal_samples,
+        merge_conflict_samples=ttc_merge_conflict_samples,
+        step_length_s=step_length,
+    )
 
     metrics = {
         'policy_name': policy,
+        'policy_variant': policy_variant_name,
+        'metrics_schema_version': 'v2_ttc',
+        'ttc_warmup_s': ttc_warmup_s,
         'merge_success_rate': merge_success_rate,
         'avg_delay_at_merge_s': avg_delay,
         'throughput_veh_per_h': throughput_veh_per_h,
@@ -688,11 +711,13 @@ def run_experiment(
         'consistency_speed_tracking_mae_mps': speed_tracking_mae_mps,
         'consistency_plan_churn_rate': consistency_plan_churn_rate,
     }
+    metrics.update(ttc_metrics)
     metrics_path.write_text(json.dumps(metrics, indent=2), encoding='utf-8')
 
     config = {
         'scenario': scenario,
         'policy': policy,
+        'policy_variant': policy_variant_name,
         'sumocfg': str(sumocfg),
         'duration_s': duration_s,
         'step_length': step_length,
@@ -710,6 +735,7 @@ def run_experiment(
         'ramp_lc_target_lane': ramp_lc_target_lane,
         'aux_vmax_mps': aux_vmax_mps,
         'cav_ratio': cav_ratio,
+        'ttc_warmup_s': ttc_warmup_s,
         'output_dir': str(out_path),
     }
     config_path.write_text(json.dumps(config, indent=2), encoding='utf-8')
@@ -723,6 +749,10 @@ def run_experiment(
 
 
 def main() -> int:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(name)s %(levelname)s %(message)s',
+    )
     parser = argparse.ArgumentParser(description='Run SUMO-only ramp experiment skeleton.')
     parser.add_argument('--scenario', default='ramp_min_v1')
     parser.add_argument('--policy', default='no_control')
@@ -764,6 +794,17 @@ def main() -> int:
         help='CAV penetration ratio for mixed traffic scenarios (0.0 to 1.0).',
     )
     parser.add_argument(
+        '--policy-variant',
+        default=None,
+        help='Policy variant label used by downstream summary scripts.',
+    )
+    parser.add_argument(
+        '--ttc-warmup-s',
+        type=float,
+        default=0.0,
+        help='Warmup time before TTC sampling starts (seconds).',
+    )
+    parser.add_argument(
         '--gui',
         action='store_true',
         default=os.environ.get('SUMO_GUI', '0') in {'1', 'true', 'True'},
@@ -791,6 +832,8 @@ def main() -> int:
         ramp_lc_target_lane=args.ramp_lc_target_lane,
         aux_vmax_mps=args.aux_vmax_mps,
         cav_ratio=args.cav_ratio,
+        policy_variant=args.policy_variant,
+        ttc_warmup_s=args.ttc_warmup_s,
     )
 
 

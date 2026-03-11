@@ -1,0 +1,47 @@
+---
+description: 多 Agent 协作工作流 v2 - 共享 Context + 并行子任务 + 交叉审阅 + 投票
+alwaysApply: false
+globs: task_forum.json,task_forum.html
+---
+
+# 多 Agent 协作工作流 v2
+
+## Agent 配置
+- **主 Agent**: opus-executor（claude-opus-4-6-fast-max）— 执行任务、分配子任务
+- **辅助 Agent**: gpt-reviewer、sonnet-reviewer、gemini-reviewer — 审阅 + 执行子任务
+
+## 强制流程
+1. 每个任务创建 `task_forum.json`，所有 Agent 在 messages 中追加发言
+2. **每个 step/action 执行前**：PROPOSAL → 并行调用三审阅者 REVIEW → 任一 Agent 意见须被其余 3 个充分审核
+3. **意见不一致**：4 方投票，少数服从多数，胜出者为主 Agent；平票或无法统一时，type: QA 争取用户意见
+4. 禁止在未完成当前 step/action 讨论前进入下一步
+
+## 增强协作 1：共享 Context（重要！）
+- **搜索/分析阶段也要共享 context**，不要等到有结论才同步
+- 任何 Agent 发现重要信息时，立即以 `type: CONTEXT_SHARE` 追加到 forum
+- 发现跨任务线索时，明确 @tag 相关 Agent
+- 其他 Agent 看到 CONTEXT_SHARE 后可以 REPLY 补充关联知识
+
+## 增强协作 2：并行子任务分发
+当任务复杂或搜索耗时较长时，主 Agent 主动拆分子任务：
+1. 发布 PROPOSAL，包含子任务分配表（Agent | 子任务 | 目标 | 优先级）
+2. 三位审阅者 REVIEW 分配方案
+3. 各审阅者并行执行子任务，追加 `type: SUBTASK_RESULT`
+4. 子任务中发现的 context 随时追加 CONTEXT_SHARE，其他 Agent 可 REPLY
+5. 所有子任务完成后，Opus 汇总 + 全员 VOTE
+
+## task_forum 消息类型
+| type | 发送者 | 说明 |
+|------|--------|------|
+| CONTEXT_SHARE | 任意 | 共享重要 context，其他 Agent 可 REPLY |
+| PROPOSAL | Opus | 提出方案或子任务分配 |
+| REVIEW | 审阅者 | 审阅 PROPOSAL |
+| SUBTASK_RESULT | 被分配者 | 子任务执行结果 |
+| REPLY | 任意 | 回复他人消息 |
+| VOTE | 任意 | 投票 |
+| EXECUTION | Opus | 执行已通过的方案 |
+| QA | Opus | 需要用户参与决策 |
+
+## 模型可用性
+- 若某子代理 model 报错，改为 `inherit` 确保可运行；需 Max 模式
+- 运行 `python build_forum.py` 生成 `task_forum.html` 供人类查看
