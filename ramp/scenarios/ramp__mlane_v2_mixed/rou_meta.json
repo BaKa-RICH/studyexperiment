@@ -1,0 +1,20 @@
+{
+  "seed": null,
+  "cav_ratio": 0.6,
+  "main_vph": 1200,
+  "ramp_vph": 500,
+  "duration": 300,
+  "arrival_mode": "uniform",
+  "total_vehicles": 441,
+  "actual_cav_count": 262,
+  "actual_hdv_count": 179,
+  "actual_cav_ratio": 0.5941,
+  "vtype_cav_sigma": "0.0",
+  "vtype_cav_speed_dev": "0.0",
+  "vtype_cav_car_follow_model": "Krauss",
+  "vtype_hdv_sigma": "0.5",
+  "vtype_hdv_speed_dev": "0.1",
+  "vtype_hdv_car_follow_model": "Krauss",
+  "vtype_hdv_lc_strategic": "1.0",
+  "_note": "Legacy scenario - HDV sigma=0.5 differs from vehicle_defs.py canonical 0.7"
+}

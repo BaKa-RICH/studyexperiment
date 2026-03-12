@@ -39,6 +39,7 @@ from ramp.runtime.takeover import (
     parse_takeover_mode,
 )
 from ramp.runtime.ttc import build_ttc_metrics, collect_ttc_samples
+from ramp.common.vehicle_defs import VEH_TYPE_HDV, validate_rou_vtypes
 
 
 def _ensure_sumo_tools_on_path() -> None:
@@ -162,6 +163,11 @@ def run_experiment(
     policy_variant: str | None = None,
     ttc_warmup_s: float = 0.0,
     takeover_mode: str = 'current',
+    generate_rou: bool = False,
+    main_vph: int = 1200,
+    ramp_vph: int = 500,
+    rou_duration: int = 300,
+    arrival_mode: str = 'uniform',
 ) -> int:
     if duration_s <= 0:
         raise ValueError('duration-s must be > 0')
@@ -197,6 +203,45 @@ def run_experiment(
         shutil.rmtree(out_path)
     out_path.mkdir(parents=True, exist_ok=True)
 
+    rou_meta: dict | None = None
+    generated_rou_path: Path | None = None
+
+    if generate_rou:
+        from ramp.tools.generate_mixed_rou import generate_rou_xml
+        generated_rou_path, rou_meta = generate_rou_xml(
+            seed=seed if seed is not None else 42,
+            cav_ratio=cav_ratio,
+            main_vph=main_vph,
+            ramp_vph=ramp_vph,
+            duration=rou_duration,
+            arrival_mode=arrival_mode,
+            output=out_path / 'generated.rou.xml',
+        )
+        logger.info('Generated rou.xml at %s (seed=%s, cav_ratio=%.2f)',
+                     generated_rou_path, seed, cav_ratio)
+    else:
+        scenario_dir = repo_root / 'ramp' / 'scenarios' / scenario
+        rou_meta_path = scenario_dir / 'rou_meta.json'
+        if rou_meta_path.exists():
+            rou_meta = json.loads(rou_meta_path.read_text(encoding='utf-8'))
+            logger.info('Loaded rou_meta.json from %s', rou_meta_path)
+            meta_cav_ratio = rou_meta.get('cav_ratio')
+            if meta_cav_ratio is not None and abs(meta_cav_ratio - cav_ratio) > 0.01:
+                logger.warning(
+                    '--cav-ratio=%.2f does not match rou_meta.json cav_ratio=%.2f. '
+                    'Use --generate-rou to regenerate rou.xml with the desired ratio.',
+                    cav_ratio, meta_cav_ratio,
+                )
+
+        rou_xml_candidates = list(scenario_dir.glob('*.rou.xml'))
+        if rou_xml_candidates:
+            vtype_issues = validate_rou_vtypes(rou_xml_candidates[0])
+            if vtype_issues:
+                logger.warning(
+                    'vType discrepancies in %s: %s',
+                    rou_xml_candidates[0].name, '; '.join(vtype_issues),
+                )
+
     cmd = [
         sumo_binary,
         '--configuration-file',
@@ -206,6 +251,8 @@ def run_experiment(
         '--no-step-log',
         'true',
     ]
+    if generated_rou_path is not None:
+        cmd += ['--route-files', str(generated_rou_path)]
     if seed is not None:
         cmd += ['--seed', str(seed)]
 
@@ -742,7 +789,7 @@ def run_experiment(
                     if veh_id not in control_zone_state:
                         continue
                     vehicle_state = control_zone_state[veh_id]
-                    if traci.vehicle.getTypeID(veh_id) == 'hdv':
+                    if traci.vehicle.getTypeID(veh_id) == VEH_TYPE_HDV:
                         continue
                     controlled_cav_steps += 1
                     covered_control_cav_steps += 1
@@ -802,7 +849,7 @@ def run_experiment(
                 for veh_id in sorted(lane_change_command_ids - set(command.set_speed_mps)):
                     if veh_id not in control_zone_state:
                         continue
-                    if traci.vehicle.getTypeID(veh_id) == 'hdv':
+                    if traci.vehicle.getTypeID(veh_id) == VEH_TYPE_HDV:
                         continue
                     control_event_index += 1
                     control_writer.writerow(
@@ -1107,8 +1154,11 @@ def run_experiment(
         'cav_ratio': cav_ratio,
         'ttc_warmup_s': ttc_warmup_s,
         'takeover_mode': takeover_mode,
+        'generate_rou': generate_rou,
         'output_dir': str(out_path),
     }
+    if rou_meta is not None:
+        config['rou_meta'] = rou_meta
     config_path.write_text(json.dumps(config, indent=2), encoding='utf-8')
 
     print(f'[ramp.run] output_dir={out_path}')
@@ -1186,6 +1236,21 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        '--generate-rou',
+        action='store_true',
+        default=False,
+        help='Generate rou.xml on-the-fly from --cav-ratio/--seed/--main-vph etc. '
+             'Uses SUMO CLI --route-files to override sumocfg.',
+    )
+    parser.add_argument('--main-vph', type=int, default=1200,
+                        help='Main road flow per lane in veh/h (only with --generate-rou).')
+    parser.add_argument('--ramp-vph', type=int, default=500,
+                        help='Ramp R1 flow in veh/h (only with --generate-rou).')
+    parser.add_argument('--rou-duration', type=int, default=300,
+                        help='Vehicle generation duration in seconds (only with --generate-rou).')
+    parser.add_argument('--arrival-mode', choices=['uniform', 'poisson'], default='uniform',
+                        help='Vehicle arrival distribution (only with --generate-rou).')
+    parser.add_argument(
         '--gui',
         action='store_true',
         default=os.environ.get('SUMO_GUI', '0') in {'1', 'true', 'True'},
@@ -1216,6 +1281,11 @@ def main() -> int:
         policy_variant=args.policy_variant,
         ttc_warmup_s=args.ttc_warmup_s,
         takeover_mode=args.takeover_mode,
+        generate_rou=args.generate_rou,
+        main_vph=args.main_vph,
+        ramp_vph=args.ramp_vph,
+        rou_duration=args.rou_duration,
+        arrival_mode=args.arrival_mode,
     )
 
 

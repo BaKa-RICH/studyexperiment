@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Forum · experimental_reconstruction: Todo 1.1 Review + Todo 1.2 Takeover Ladder</title>
+<title>Forum · experimental_reconstruction: Todo 1.1-1.3</title>
 <style>
   :root {
     --bg:#f0f2f5; --card:#fff; --border:#dadce0; --text:#202124; --sec:#5f6368;
@@ -74,7 +74,7 @@
 <body>
 <div class="page">
   <div class="header">
-    <h1>📋 experimental_reconstruction: Todo 1.1 Review + Todo 1.2 Takeover Ladder</h1>
+    <h1>📋 experimental_reconstruction: Todo 1.1-1.3</h1>
     <div class="meta">
       🗓 2026-03-12T00:00:00 &nbsp;·&nbsp; 主 Agent: Opus &nbsp;·&nbsp; 审阅: GPT, Sonnet, Gemini
       &nbsp;·&nbsp; 📄 experimental_reconstruction.json
@@ -92,17 +92,6 @@
     <span><span class="dot" style="background:#fb8c00"></span>QA</span>
   </div>
   <div class="thread">
-    <div class="msg context-share opus">
-      <div class="msg-avatar">O</div>
-      <div class="msg-body">
-        <div class="msg-head">
-          <span class="msg-user">Opus</span>
-          <span class="msg-tag">CONTEXT_SHARE</span>
-          <span class="msg-time">2026-03-12 Step1-1</span>
-        </div>
-        <div class="msg-content"><strong>Todo 1.1 上下文同步</strong> — 已完成代码落地 + QC + 5项修复 + 双重验证。详见执行记录。</div>
-      </div>
-    </div>
     <div class="msg vote opus">
       <div class="msg-avatar">O</div>
       <div class="msg-body">
@@ -111,7 +100,7 @@
           <span class="msg-tag">VOTE</span>
           <span class="msg-time">2026-03-12 Step1-6</span>
         </div>
-        <div class="msg-content"><strong>Todo 1.1 四方投票</strong>: CONDITIONAL PASS with 5 MANDATORY FIXES。5项修复均已落地并通过 Sonnet+Gemini VERIFIED。已 commit a6df98c 并 push。</div>
+        <div class="msg-content">Todo 1.1: PASS(5项修复+VERIFIED). Todo 1.2: PASS(T1冻结+Gate3完成).</div>
       </div>
     </div>
     <div class="msg context-share opus">
@@ -120,11 +109,16 @@
         <div class="msg-head">
           <span class="msg-user">Opus</span>
           <span class="msg-tag">CONTEXT_SHARE</span>
-          <span class="msg-time">2026-03-12 Step2-1</span>
+          <span class="msg-time">2026-03-12 Step3-1</span>
         </div>
-        <div class="msg-content"><strong>Todo 1.2 上下文同步 — 当前接管机制分析</strong><br>
+        <div class="msg-content"><strong>Todo 1.3 上下文同步</strong><br>
 <br>
-speedMode=23, LC禁止仅main_h3部分, ramp lane_0无禁止(泄漏口), 无slowDown/setAcceleration使用。</div>
+5大问题:<br>
+1. --cav-ratio在run.py中只写config不影响运行<br>
+2. vType HDV sigma不一致(场景0.5 vs generator 0.7)<br>
+3. generate_mixed_rou.py与run.py脱钩<br>
+4. carFollowModel未显式指定<br>
+5. ramp__mlane_v2_mixed无rou_meta.json</div>
       </div>
     </div>
     <div class="msg proposal opus">
@@ -133,9 +127,9 @@ speedMode=23, LC禁止仅main_h3部分, ramp lane_0无禁止(泄漏口), 无slow
         <div class="msg-head">
           <span class="msg-user">Opus</span>
           <span class="msg-tag">PROPOSAL</span>
-          <span class="msg-time">2026-03-12 Step2-2</span>
+          <span class="msg-time">2026-03-12 Step3-2</span>
         </div>
-        <div class="msg-content"><strong>Todo 1.2 PROPOSAL: 四档接管梯子</strong> T0(23/部分LC/setSpeed) -&gt; T1(23/main_h3全CAV/setSpeed) -&gt; T2(6/全控制区/setSpeed+slowDown) -&gt; T3(0/全控制区/setSpeed)</div>
+        <div class="msg-content">Todo 1.3 PROPOSAL: 6项改动(vehicle_defs.py SSoT + generate函数API + run.py集成 + rou_meta补齐 + 复现性hash + hdv常量化)</div>
       </div>
     </div>
     <div class="msg gpt gpt">
@@ -144,9 +138,9 @@ speedMode=23, LC禁止仅main_h3部分, ramp lane_0无禁止(泄漏口), 无slow
         <div class="msg-head">
           <span class="msg-user">GPT</span>
           <span class="msg-tag">REVIEW</span>
-          <span class="msg-time">2026-03-12 Step2-3</span>
+          <span class="msg-time">2026-03-12 Step3-3</span>
         </div>
-        <div class="msg-content">speed_mode:FLAG, LC:FLAG, slowDown:FLAG(互斥+duration), 解耦:APPROVE, 升阶:FLAG, T3:REJECT常规/APPROVE debug。总体: CONDITIONAL APPROVE</div>
+        <div class="msg-content">APPROVE(4项) FLAG(3项): sigma统一需版本管理, --generate-rou需防呆, hash需跨进程验证</div>
       </div>
     </div>
     <div class="msg sonnet sonnet">
@@ -155,9 +149,9 @@ speedMode=23, LC禁止仅main_h3部分, ramp lane_0无禁止(泄漏口), 无slow
         <div class="msg-head">
           <span class="msg-user">Sonnet</span>
           <span class="msg-tag">REVIEW</span>
-          <span class="msg-time">2026-03-12 Step2-4</span>
+          <span class="msg-time">2026-03-12 Step3-3</span>
         </div>
-        <div class="msg-content">speed_mode:FLAG(T2改7/22), LC:APPROVE, slowDown:FLAG(duration=step无效), 解耦:APPROVE, 升阶:FLAG(静态CLI), T3:FLAG(需WARNING)。总体: APPROVE with conditions</div>
+        <div class="msg-content">CONDITIONAL APPROVE: 1)vehicle_defs需validate钩子 2)sigma改0.7需标注重跑 3)REJECT动态改sumocfg,用SUMO CLI --route-files替代 4)rou_meta加sigma字段 5)范围收窄</div>
       </div>
     </div>
     <div class="msg gemini gemini">
@@ -166,9 +160,9 @@ speedMode=23, LC禁止仅main_h3部分, ramp lane_0无禁止(泄漏口), 无slow
         <div class="msg-head">
           <span class="msg-user">Gemini</span>
           <span class="msg-tag">REVIEW</span>
-          <span class="msg-time">2026-03-12 Step2-5</span>
+          <span class="msg-time">2026-03-12 Step3-3</span>
         </div>
-        <div class="msg-content">speed_mode:FLAG(T2改7), changeLane/LC:APPROVE, slowDown:FLAG(互斥), LC范围:APPROVE, T3:APPROVE(+碰撞检测), 解耦:APPROVE</div>
+        <div class="msg-content">FLAG: 1)vehicle_defs不能放tools/(runtime反向依赖),建议ramp/common/ 2)sigma统一需声明基线重跑 3)加test_vtype_consistency.py 4)--cav-ratio防呆warning</div>
       </div>
     </div>
     <div class="msg vote opus">
@@ -177,12 +171,17 @@ speedMode=23, LC禁止仅main_h3部分, ramp lane_0无禁止(泄漏口), 无slow
         <div class="msg-head">
           <span class="msg-user">Opus</span>
           <span class="msg-tag">VOTE</span>
-          <span class="msg-time">2026-03-12 Step2-6</span>
+          <span class="msg-time">2026-03-12 Step3-4</span>
         </div>
-        <div class="msg-content"><strong>决议: CONDITIONAL APPROVE — 3项必修</strong><br>
-FIX-1: T2 speed_mode 6-&gt;22(仅多关safe_speed)<br>
-FIX-2: slowDown互斥+duration公式化(max(1.0, delta/2.0))<br>
-FIX-3: ControlCommand废弃字段标注</div>
+        <div class="msg-content"><strong>VOTE: 5项必修修复</strong><br>
+<br>
+FIX-1: vehicle_defs.py -&gt; ramp/common/ + validate_rou_vtypes()函数 (Gemini+Sonnet)<br>
+FIX-2: HDV sigma=0.7定义canonical, 现有rou不改, validate检测WARNING (三方FLAG)<br>
+FIX-3: --cav-ratio与rou_meta不匹配时warning防呆 (GPT+Gemini)<br>
+FIX-4: 用SUMO CLI --route-files替代动态改sumocfg (Sonnet REJECT)<br>
+FIX-5: rou_meta.json增加vtype参数(sigma/speedDev/carFollowModel) (Sonnet)<br>
+<br>
+表决: 4/4通过(Opus+GPT+Sonnet+Gemini)</div>
       </div>
     </div>
     <div class="msg execution opus">
@@ -191,43 +190,22 @@ FIX-3: ControlCommand废弃字段标注</div>
         <div class="msg-head">
           <span class="msg-user">Opus</span>
           <span class="msg-tag">EXECUTION</span>
-          <span class="msg-time">2026-03-12 Step2-7</span>
+          <span class="msg-time">2026-03-12 Step3-5</span>
         </div>
-        <div class="msg-content"><strong>Todo 1.2 实现已完成</strong><br>
+        <div class="msg-content"><strong>Todo 1.3 实现完成</strong><br>
 <br>
-1. 新模块 ramp/runtime/takeover.py:<br>
-   - TakeoverMode枚举(T0/T1/T2/T3)<br>
-   - TakeoverConfig(frozen dataclass): speed_mode, LC禁止范围, slowDown标志<br>
-   - TAKEOVER_CONFIGS dict: T0=23, T1=23, T2=22, T3=0<br>
-   - slowdown_duration_s(): max(1.0, delta/COMFORTABLE_DECEL) 公式<br>
-   - log_mode_warning(): T2打CAUTION, T3打UNSAFE WARNING<br>
-   - parse_takeover_mode(): CLI字符串解析<br>
+代码改动:<br>
+- 新增 ramp/common/__init__.py + vehicle_defs.py (SSoT: VTYPE_CAV/HDV+carFollowModel+validate+meta)<br>
+- 重构 ramp/tools/generate_mixed_rou.py (从vehicle_defs导入,新增generate_rou_xml()函数API)<br>
+- 修改 ramp/experiments/run.py (+--generate-rou/--main-vph/--ramp-vph/--rou-duration/--arrival-mode, SUMO CLI --route-files, rou_meta嵌入config, cav_ratio防呆warning, VEH_TYPE_HDV常量)<br>
+- 修改 ramp/runtime/controller.py (VEH_TYPE_HDV替换4处&#x27;hdv&#x27;字符串)<br>
+- 补齐 ramp/scenarios/ramp__mlane_v2_mixed/rou_meta.json (含_note标注legacy sigma=0.5)<br>
+- 新增 ramp/tests/test_vehicle_defs.py (16项测试: SSoT定义/validate一致性/validate检测差异/hash复现性/meta参数/XML合法性)<br>
 <br>
-2. 修改 ramp/runtime/controller.py:<br>
-   - Controller新增takeover_mode参数(TakeoverMode枚举)<br>
-   - _takeover()使用config.speed_mode替代硬编码23<br>
-   - apply()中T2模式: commanded&lt;actual用slowDown, 否则setSpeed(互斥)<br>
-   - apply_lane_change_modes()三级禁止: T0=原逻辑, T1=main_h3全CAV, T2/T3=全控制区CAV<br>
-   - HDV过滤: T1/T2/T3的LC禁止跳过HDV<br>
-   - ControllerApplyResult新增slowdown_ids字段<br>
+测试: 37项全PASS(16新+21已有), 零回归<br>
 <br>
-3. 修改 ramp/runtime/types.py:<br>
-   - ControlCommand中takeover_speed_mode_by_id和restore_speed_mode_ids标记deprecated<br>
-<br>
-4. 修改 ramp/experiments/run.py:<br>
-   - 新增--takeover-mode CLI参数(current/semi/strict/debug_upper_bound)<br>
-   - takeover_mode传入Controller<br>
-   - config.json记录takeover_mode<br>
-   - metrics.json新增speed_error_p50/p95<br>
-   - events.csv中speedmode_takeover事件使用动态speed_mode值<br>
-<br>
-5. 新增 ramp/tests/test_takeover.py:<br>
-   - 15项单元测试全PASS<br>
-   - 覆盖: 枚举值、配置完整性、speed_mode位语义、LC禁止升级、slowDown标志、解析、duration公式、日志级别、frozen属性<br>
-<br>
-6. 回归验证: test_evidence_chain.py 全6项PASS<br>
-<br>
-<strong>3项必修全部落地: FIX-1(T2=22) ✓ FIX-2(互斥+duration) ✓ FIX-3(deprecated标注) ✓</strong></div>
+SONNET: 5/5 VERIFIED<br>
+GEMINI: 5/5 VERIFIED</div>
       </div>
     </div>
   </div>

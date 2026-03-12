@@ -1,62 +1,56 @@
 {
-  "title": "experimental_reconstruction: Todo 1.1 Review + Todo 1.2 Takeover Ladder",
+  "title": "experimental_reconstruction: Todo 1.1-1.3",
   "created": "2026-03-12T00:00:00",
   "main_agent": "Opus",
   "reviewers": ["GPT", "Sonnet", "Gemini"],
   "messages": [
     {
       "agent": "Opus",
-      "type": "CONTEXT_SHARE",
-      "time": "2026-03-12 Step1-1",
-      "content": "**Todo 1.1 上下文同步** — 已完成代码落地 + QC + 5项修复 + 双重验证。详见执行记录。"
-    },
-    {
-      "agent": "Opus",
       "type": "VOTE",
       "time": "2026-03-12 Step1-6",
-      "content": "**Todo 1.1 四方投票**: CONDITIONAL PASS with 5 MANDATORY FIXES。5项修复均已落地并通过 Sonnet+Gemini VERIFIED。已 commit a6df98c 并 push。"
+      "content": "Todo 1.1: PASS(5项修复+VERIFIED). Todo 1.2: PASS(T1冻结+Gate3完成)."
     },
     {
       "agent": "Opus",
       "type": "CONTEXT_SHARE",
-      "time": "2026-03-12 Step2-1",
-      "content": "**Todo 1.2 上下文同步 — 当前接管机制分析**\n\nspeedMode=23, LC禁止仅main_h3部分, ramp lane_0无禁止(泄漏口), 无slowDown/setAcceleration使用。"
+      "time": "2026-03-12 Step3-1",
+      "content": "**Todo 1.3 上下文同步**\n\n5大问题:\n1. --cav-ratio在run.py中只写config不影响运行\n2. vType HDV sigma不一致(场景0.5 vs generator 0.7)\n3. generate_mixed_rou.py与run.py脱钩\n4. carFollowModel未显式指定\n5. ramp__mlane_v2_mixed无rou_meta.json"
     },
     {
       "agent": "Opus",
       "type": "PROPOSAL",
-      "time": "2026-03-12 Step2-2",
-      "content": "**Todo 1.2 PROPOSAL: 四档接管梯子** T0(23/部分LC/setSpeed) -> T1(23/main_h3全CAV/setSpeed) -> T2(6/全控制区/setSpeed+slowDown) -> T3(0/全控制区/setSpeed)"
+      "time": "2026-03-12 Step3-2",
+      "content": "Todo 1.3 PROPOSAL: 6项改动(vehicle_defs.py SSoT + generate函数API + run.py集成 + rou_meta补齐 + 复现性hash + hdv常量化)"
     },
     {
       "agent": "GPT",
       "type": "REVIEW",
-      "time": "2026-03-12 Step2-3",
-      "content": "speed_mode:FLAG, LC:FLAG, slowDown:FLAG(互斥+duration), 解耦:APPROVE, 升阶:FLAG, T3:REJECT常规/APPROVE debug。总体: CONDITIONAL APPROVE"
+      "time": "2026-03-12 Step3-3",
+      "content": "APPROVE(4项) FLAG(3项): sigma统一需版本管理, --generate-rou需防呆, hash需跨进程验证"
     },
     {
       "agent": "Sonnet",
       "type": "REVIEW",
-      "time": "2026-03-12 Step2-4",
-      "content": "speed_mode:FLAG(T2改7/22), LC:APPROVE, slowDown:FLAG(duration=step无效), 解耦:APPROVE, 升阶:FLAG(静态CLI), T3:FLAG(需WARNING)。总体: APPROVE with conditions"
+      "time": "2026-03-12 Step3-3",
+      "content": "CONDITIONAL APPROVE: 1)vehicle_defs需validate钩子 2)sigma改0.7需标注重跑 3)REJECT动态改sumocfg,用SUMO CLI --route-files替代 4)rou_meta加sigma字段 5)范围收窄"
     },
     {
       "agent": "Gemini",
       "type": "REVIEW",
-      "time": "2026-03-12 Step2-5",
-      "content": "speed_mode:FLAG(T2改7), changeLane/LC:APPROVE, slowDown:FLAG(互斥), LC范围:APPROVE, T3:APPROVE(+碰撞检测), 解耦:APPROVE"
+      "time": "2026-03-12 Step3-3",
+      "content": "FLAG: 1)vehicle_defs不能放tools/(runtime反向依赖),建议ramp/common/ 2)sigma统一需声明基线重跑 3)加test_vtype_consistency.py 4)--cav-ratio防呆warning"
     },
     {
       "agent": "Opus",
       "type": "VOTE",
-      "time": "2026-03-12 Step2-6",
-      "content": "**决议: CONDITIONAL APPROVE — 3项必修**\nFIX-1: T2 speed_mode 6->22(仅多关safe_speed)\nFIX-2: slowDown互斥+duration公式化(max(1.0, delta/2.0))\nFIX-3: ControlCommand废弃字段标注"
+      "time": "2026-03-12 Step3-4",
+      "content": "**VOTE: 5项必修修复**\n\nFIX-1: vehicle_defs.py -> ramp/common/ + validate_rou_vtypes()函数 (Gemini+Sonnet)\nFIX-2: HDV sigma=0.7定义canonical, 现有rou不改, validate检测WARNING (三方FLAG)\nFIX-3: --cav-ratio与rou_meta不匹配时warning防呆 (GPT+Gemini)\nFIX-4: 用SUMO CLI --route-files替代动态改sumocfg (Sonnet REJECT)\nFIX-5: rou_meta.json增加vtype参数(sigma/speedDev/carFollowModel) (Sonnet)\n\n表决: 4/4通过(Opus+GPT+Sonnet+Gemini)"
     },
     {
       "agent": "Opus",
       "type": "EXECUTION",
-      "time": "2026-03-12 Step2-7",
-      "content": "**Todo 1.2 实现已完成**\n\n1. 新模块 ramp/runtime/takeover.py:\n   - TakeoverMode枚举(T0/T1/T2/T3)\n   - TakeoverConfig(frozen dataclass): speed_mode, LC禁止范围, slowDown标志\n   - TAKEOVER_CONFIGS dict: T0=23, T1=23, T2=22, T3=0\n   - slowdown_duration_s(): max(1.0, delta/COMFORTABLE_DECEL) 公式\n   - log_mode_warning(): T2打CAUTION, T3打UNSAFE WARNING\n   - parse_takeover_mode(): CLI字符串解析\n\n2. 修改 ramp/runtime/controller.py:\n   - Controller新增takeover_mode参数(TakeoverMode枚举)\n   - _takeover()使用config.speed_mode替代硬编码23\n   - apply()中T2模式: commanded<actual用slowDown, 否则setSpeed(互斥)\n   - apply_lane_change_modes()三级禁止: T0=原逻辑, T1=main_h3全CAV, T2/T3=全控制区CAV\n   - HDV过滤: T1/T2/T3的LC禁止跳过HDV\n   - ControllerApplyResult新增slowdown_ids字段\n\n3. 修改 ramp/runtime/types.py:\n   - ControlCommand中takeover_speed_mode_by_id和restore_speed_mode_ids标记deprecated\n\n4. 修改 ramp/experiments/run.py:\n   - 新增--takeover-mode CLI参数(current/semi/strict/debug_upper_bound)\n   - takeover_mode传入Controller\n   - config.json记录takeover_mode\n   - metrics.json新增speed_error_p50/p95\n   - events.csv中speedmode_takeover事件使用动态speed_mode值\n\n5. 新增 ramp/tests/test_takeover.py:\n   - 15项单元测试全PASS\n   - 覆盖: 枚举值、配置完整性、speed_mode位语义、LC禁止升级、slowDown标志、解析、duration公式、日志级别、frozen属性\n\n6. 回归验证: test_evidence_chain.py 全6项PASS\n\n**3项必修全部落地: FIX-1(T2=22) ✓ FIX-2(互斥+duration) ✓ FIX-3(deprecated标注) ✓**"
+      "time": "2026-03-12 Step3-5",
+      "content": "**Todo 1.3 实现完成**\n\n代码改动:\n- 新增 ramp/common/__init__.py + vehicle_defs.py (SSoT: VTYPE_CAV/HDV+carFollowModel+validate+meta)\n- 重构 ramp/tools/generate_mixed_rou.py (从vehicle_defs导入,新增generate_rou_xml()函数API)\n- 修改 ramp/experiments/run.py (+--generate-rou/--main-vph/--ramp-vph/--rou-duration/--arrival-mode, SUMO CLI --route-files, rou_meta嵌入config, cav_ratio防呆warning, VEH_TYPE_HDV常量)\n- 修改 ramp/runtime/controller.py (VEH_TYPE_HDV替换4处'hdv'字符串)\n- 补齐 ramp/scenarios/ramp__mlane_v2_mixed/rou_meta.json (含_note标注legacy sigma=0.5)\n- 新增 ramp/tests/test_vehicle_defs.py (16项测试: SSoT定义/validate一致性/validate检测差异/hash复现性/meta参数/XML合法性)\n\n测试: 37项全PASS(16新+21已有), 零回归\n\nSONNET: 5/5 VERIFIED\nGEMINI: 5/5 VERIFIED"
     }
   ]
 }
