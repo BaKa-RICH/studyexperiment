@@ -4,13 +4,16 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from ramp.policies.hierarchical.merge_point import MergePointManager, VehicleState
+from ramp.policies.hierarchical.merge_point import MergePointManager, MergePointParams, VehicleState
 from ramp.policies.hierarchical.state_collector_ext import ZoneAInfo
 from ramp.policies.hierarchical.zone_a import ZoneAEvacuator
 from ramp.runtime.types import Plan
 from ramp.scheduler.arrival_time import minimum_arrival_time_at_on_ramp
 from ramp.scheduler.dp import dp_schedule
 from ramp.scheduler.dp_mixed import dp_mixed_schedule
+
+MERGE_POLICY_FIXED = 'fixed'
+MERGE_POLICY_FLEXIBLE = 'flexible'
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +198,7 @@ class HierarchicalScheduler:
     delta_2_s: float
     main_vmax_mps: float
     ramp_vmax_mps: float
+    merge_policy: str = MERGE_POLICY_FLEXIBLE
     replan_interval_s: float = 0.5
     aux_vmax_mps: float | None = None
     zone_a_interval_s: float = 1.0
@@ -208,8 +212,17 @@ class HierarchicalScheduler:
     zone_c_actions: dict[str, tuple[int, float]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        if self.merge_policy not in (MERGE_POLICY_FIXED, MERGE_POLICY_FLEXIBLE):
+            raise ValueError(f'Unknown merge_policy: {self.merge_policy!r}')
         if self._merge_point_mgr is None:
-            self._merge_point_mgr = MergePointManager()
+            if self.merge_policy == MERGE_POLICY_FIXED:
+                default_params = MergePointParams()
+                fixed_params = MergePointParams(
+                    search_start_pos_m=default_params.lane0_length_m - default_params.fallback_buffer_m,
+                )
+                self._merge_point_mgr = MergePointManager(params=fixed_params)
+            else:
+                self._merge_point_mgr = MergePointManager()
         if self._zone_a_evacuator is None:
             self._zone_a_evacuator = ZoneAEvacuator(
                 v_limit_mps=self.main_vmax_mps,

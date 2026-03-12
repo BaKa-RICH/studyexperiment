@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Forum · experimental_reconstruction: Todo 1.1-2.1</title>
+<title>Forum · experimental_reconstruction: Todo 1.1-2.2</title>
 <style>
   :root {
     --bg:#f0f2f5; --card:#fff; --border:#dadce0; --text:#202124; --sec:#5f6368;
@@ -74,7 +74,7 @@
 <body>
 <div class="page">
   <div class="header">
-    <h1>📋 experimental_reconstruction: Todo 1.1-2.1</h1>
+    <h1>📋 experimental_reconstruction: Todo 1.1-2.2</h1>
     <div class="meta">
       🗓 2026-03-12T00:00:00 &nbsp;·&nbsp; 主 Agent: Opus &nbsp;·&nbsp; 审阅: GPT, Sonnet, Gemini
       &nbsp;·&nbsp; 📄 experimental_reconstruction.json
@@ -111,62 +111,7 @@
           <span class="msg-tag">CONTEXT_SHARE</span>
           <span class="msg-time">2026-03-12 Step4-1</span>
         </div>
-        <div class="msg-content">Todo 1.4 3大不公平问题: 1)FIFO/DP给HDV发幽灵命令 2)speed_tracking被HDV污染 3)control_mode不一致(E-ctrl-1 vs E-ctrl-2)</div>
-      </div>
-    </div>
-    <div class="msg proposal opus">
-      <div class="msg-avatar">O</div>
-      <div class="msg-body">
-        <div class="msg-head">
-          <span class="msg-user">Opus</span>
-          <span class="msg-tag">PROPOSAL</span>
-          <span class="msg-time">2026-03-12 Step4-2</span>
-        </div>
-        <div class="msg-content">4项修复: FIX-1命令过滤 FIX-2vehicle_types收集 FIX-3统一E-ctrl-2 FIX-4 no_control标注</div>
-      </div>
-    </div>
-    <div class="msg gpt gpt">
-      <div class="msg-avatar">G</div>
-      <div class="msg-body">
-        <div class="msg-head">
-          <span class="msg-user">GPT</span>
-          <span class="msg-tag">REVIEW</span>
-          <span class="msg-time">2026-03-12 Step4-3</span>
-        </div>
-        <div class="msg-content">FIX-1 APPROVE. FIX-3 FLAG(保留CLI开关). FIX-4 FLAG(需强隔离). speed_tracking自动修复. 补防呆检查.</div>
-      </div>
-    </div>
-    <div class="msg sonnet sonnet">
-      <div class="msg-avatar">S</div>
-      <div class="msg-body">
-        <div class="msg-head">
-          <span class="msg-user">Sonnet</span>
-          <span class="msg-tag">REVIEW</span>
-          <span class="msg-time">2026-03-12 Step4-3</span>
-        </div>
-        <div class="msg-content">FIX-1 APPROVE(command_builder层SRP最优). FIX-2与FIX-1冗余. FIX-3应删360行硬编码改CLI default. 补contract vehicle_type字段(FIX-5). 建议空dict fallback.</div>
-      </div>
-    </div>
-    <div class="msg gemini gemini">
-      <div class="msg-avatar">G</div>
-      <div class="msg-body">
-        <div class="msg-head">
-          <span class="msg-user">Gemini</span>
-          <span class="msg-tag">REVIEW</span>
-          <span class="msg-time">2026-03-12 Step4-3</span>
-        </div>
-        <div class="msg-content">FIX-1 APPROVE. FIX-3 <strong>REJECT</strong>(致命风险: FIFO/DP无conflict_lane过滤,E-ctrl-2会引入全车道虚假冲突). 建议保持E-ctrl-1或补过滤. contract HDV行为合理. summarize_metrics不受影响.</div>
-      </div>
-    </div>
-    <div class="msg vote opus">
-      <div class="msg-avatar">O</div>
-      <div class="msg-body">
-        <div class="msg-head">
-          <span class="msg-user">Opus</span>
-          <span class="msg-tag">VOTE</span>
-          <span class="msg-time">2026-03-12 Step4-4</span>
-        </div>
-        <div class="msg-content">VOTE(5项): FIX-1命令过滤(APPROVE) FIX-2合并到FIX-1 FIX-3改为删除硬编码覆盖尊重CLI(Gemini致命风险) FIX-4 no_control标注 FIX-5 contract补vehicle_type</div>
+        <div class="msg-content">Todo 1.4 3大不公平问题: 1)FIFO/DP给HDV发幽灵命令 2)speed_tracking被HDV污染 3)control_mode不一致</div>
       </div>
     </div>
     <div class="msg execution opus">
@@ -177,7 +122,7 @@
           <span class="msg-tag">EXECUTION</span>
           <span class="msg-time">2026-03-12 Step4-5</span>
         </div>
-        <div class="msg-content">Todo 1.4实现完成。改动: FIFO/DP command_builder加vehicle_types过滤, run.py收集vehicle_types+删除E-ctrl-2硬编码+baseline_role标注+contract vehicle_type, evidence_chain补vehicle_type字段。95项测试PASS(排除5个预存merge_point故障), 零回归。Sonnet+Gemini 5/5 VERIFIED。Gate 1/2/3静态PASS, Q1 FAIR_BASELINE_ANCHOR已形成。</div>
+        <div class="msg-content">Todo 1.4实现完成。95项测试PASS, 零回归。Gate 1/2/3静态PASS, Q1 FAIR_BASELINE_ANCHOR已形成。</div>
       </div>
     </div>
     <div class="msg context-share opus">
@@ -188,51 +133,7 @@
           <span class="msg-tag">CONTEXT_SHARE</span>
           <span class="msg-time">2026-03-12 Step5-1</span>
         </div>
-        <div class="msg-content">Todo 2.1 调查发现4大问题: 1)anchor语义混淆—cross_merge(actual_pos=0)和lc_complete(actual_pos=d_to_merge)双重feedback,flexible策略cross_merge会产生系统性-20m偏差(0-20=-20); 2)contract缺stream字段,无法区分ramp/main合约; 3)无eligible_ramp_cav_contract_rate指标,Gate3的95%无法度量; 4)MergePointManager.merge_history的merge_pos_m(lane坐标)与feedback的d_to_merge(到merge_edge剩余距离)坐标系不同,未映射</div>
-      </div>
-    </div>
-    <div class="msg proposal opus">
-      <div class="msg-avatar">O</div>
-      <div class="msg-body">
-        <div class="msg-head">
-          <span class="msg-user">Opus</span>
-          <span class="msg-tag">PROPOSAL</span>
-          <span class="msg-time">2026-03-12 Step5-2</span>
-        </div>
-        <div class="msg-content">5项修复: FIX-1 CONTRACT_FIELDS加stream字段+build_contract_row接收stream参数; FIX-2 定义authoritative merge event—新增resolve_anchor_event_type(merge_policy),fixed→cross_merge,flexible→lc_complete,FEEDBACK中只有matching event计入planned_actual_errors; FIX-3 build_evidence_metrics新增eligible_ramp_cav_contract_rate(eligible=entered_control+stream=ramp+type=CAV); FIX-4 冻结anchor语义—expected_merge_position_m docstring明确&#x27;到merge_edge的剩余距离&#x27;,新增ANCHOR_EVENT常量; FIX-5 run.py track eligible_ramp_cav_ids集合,传入build_evidence_metrics</div>
-      </div>
-    </div>
-    <div class="msg gpt gpt">
-      <div class="msg-avatar">G</div>
-      <div class="msg-body">
-        <div class="msg-head">
-          <span class="msg-user">GPT</span>
-          <span class="msg-tag">REVIEW</span>
-          <span class="msg-time">2026-03-12 Step5-3</span>
-        </div>
-        <div class="msg-content">FIX-1 APPROVE(补unknown fallback). FIX-2 FLAG(需lc_complete缺失时fallback到cross_merge+标记anchor_fallback=true). FIX-3 APPROVE. FIX-4 APPROVE. FIX-5 APPROVE. 补审计字段anchor_event_used.</div>
-      </div>
-    </div>
-    <div class="msg sonnet sonnet">
-      <div class="msg-avatar">S</div>
-      <div class="msg-body">
-        <div class="msg-head">
-          <span class="msg-user">Sonnet</span>
-          <span class="msg-tag">REVIEW</span>
-          <span class="msg-time">2026-03-12 Step5-3</span>
-        </div>
-        <div class="msg-content">FIX-1 APPROVE(FEEDBACK_FIELDS也必须加stream). FIX-2 FLAG(lc_complete缺失兜底+resolve_anchor_event_type加default raise). FIX-3 APPROVE(eligible在进入控制区时快照). FIX-4 APPROVE(补FEEDBACK_FIELDS anchor_event_type字段). FIX-5 APPROVE(per-episode lifecycle). 最高优先:lc_complete超时兜底+FEEDBACK补stream+anchor_event_type.</div>
-      </div>
-    </div>
-    <div class="msg gemini gemini">
-      <div class="msg-avatar">G</div>
-      <div class="msg-body">
-        <div class="msg-head">
-          <span class="msg-user">Gemini</span>
-          <span class="msg-tag">REVIEW</span>
-          <span class="msg-time">2026-03-12 Step5-3</span>
-        </div>
-        <div class="msg-content">FIX-2 <strong>REJECT</strong>(生存者偏差: flexible下zone_c_timeout的CAV无lc_complete只有cross_merge,若跳过cross_merge error则预测失败被隐藏,人为美化误差分布). 修改: flexible+无prior lc_complete的cross_merge→计入error作为惩罚. FIX-2数学: fixed position_error恒=0无预测信息,建议标记N/A. FIX-3 FLAG(仿真末期截断效应,分母含必不可能获得contract的late-arrival). R2.1 APPROVE(需强类型校验).</div>
+        <div class="msg-content">Todo 2.1 调查发现4大问题: anchor语义混淆, contract缺stream, 无eligible rate, 坐标系不一致</div>
       </div>
     </div>
     <div class="msg vote opus">
@@ -243,7 +144,7 @@
           <span class="msg-tag">VOTE</span>
           <span class="msg-time">2026-03-12 Step5-4</span>
         </div>
-        <div class="msg-content">VOTE(7项修正): FIX-1 CONTRACT+FEEDBACK双加stream(Sonnet); FIX-2修正—三分逻辑: cross_merge+fixed→计入error(authoritative), cross_merge+flexible+已有lc_complete→跳过(去重), cross_merge+flexible+无lc_complete→计入error作为fallback惩罚(Gemini生存者偏差); FIX-2b FEEDBACK加anchor_event_type字段(Sonnet); FIX-2c resolve_anchor_event_type加default ValueError(Sonnet); FIX-3 eligible定义保持简单(进入时快照)+文档注明截断效应; FIX-4冻结语义+模块docstring; FIX-5 per-episode eligible_ramp_cav_ids+lc_complete_vehicle_ids追踪</div>
+        <div class="msg-content">VOTE(7项): stream双加, 三分逻辑消除生存者偏差(Gemini), FEEDBACK加anchor_event_type, resolve_anchor_event_type加ValueError, eligible快照, 冻结语义docstring, per-episode追踪</div>
       </div>
     </div>
     <div class="msg execution opus">
@@ -254,7 +155,73 @@
           <span class="msg-tag">EXECUTION</span>
           <span class="msg-time">2026-03-12 Step5-5</span>
         </div>
-        <div class="msg-content">Todo 2.1实现完成。evidence_chain.py: 模块docstring冻结anchor语义, 新增ANCHOR_EVENT_{CROSS_MERGE,LC_COMPLETE,CROSS_MERGE_FALLBACK}常量, resolve_anchor_event_type()含ValueError兜底, CONTRACT_FIELDS+FEEDBACK_FIELDS各加stream, FEEDBACK_FIELDS加anchor_event_type, build_contract_row新增stream参数, build_evidence_metrics新增eligible_ramp_cav_ids→eligible_ramp_cav_contract_rate。run.py: cross_merge feedback三分逻辑(fixed=authoritative, flex+lc_done=skip, flex+no_lc=fallback_penalty), lc_complete feedback标记anchor_event_type=lc_complete, lc_command_issued补stream+anchor_event_type, eligible_ramp_cav_ids进入时快照收集, lc_complete_vehicle_ids追踪。106项测试PASS(含11项新增), 零回归。</div>
+        <div class="msg-content">Todo 2.1实现完成。106项测试PASS(含11项新增), 零回归。Sonnet 7/7 + Gemini 5/5 VERIFIED。Gate 1/2/3全PASS。</div>
+      </div>
+    </div>
+    <div class="msg context-share opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">CONTEXT_SHARE</span>
+          <span class="msg-time">2026-03-12 Step6-1</span>
+        </div>
+        <div class="msg-content">Todo 2.2 调查: merge_policy只影响contract层不影响实际控制。hierarchical+fixed时contract说expected_pos=0.0但Zone C仍做gap-based换道—语义不一致。</div>
+      </div>
+    </div>
+    <div class="msg proposal opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">PROPOSAL</span>
+          <span class="msg-time">2026-03-12 Step6-2</span>
+        </div>
+        <div class="msg-content">原方案: fixed时跳过Zone C(zone_c_actions={})</div>
+      </div>
+    </div>
+    <div class="msg gpt gpt">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">GPT</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-03-12 Step6-3</span>
+        </div>
+        <div class="msg-content">FIX-1 FLAG(补merge_policy校验). FIX-2 FLAG(anchor_event变量顺序风险). FIX-3 APPROVE. Zone A保持. Todo2.1兼容.</div>
+      </div>
+    </div>
+    <div class="msg sonnet sonnet">
+      <div class="msg-avatar">S</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Sonnet</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-03-12 Step6-3</span>
+        </div>
+        <div class="msg-content">FIX-1 FLAG(__post_init__条件创建MergePointManager). FIX-2 FLAG(<strong>BUG</strong>: L354 anchor_event在merge_policy定义前→UnboundLocalError). FIX-3 APPROVE.</div>
+      </div>
+    </div>
+    <div class="msg gemini gemini">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Gemini</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-03-12 Step6-3</span>
+        </div>
+        <div class="msg-content">FIX-1 <strong>REJECT</strong>(致命: LC_MODE_PROHIBIT_ALL+跳过Zone C→ramp CAV物理卡死). 正确方案: Zone C不跳过,MergePointManager以fixed params(search_start=fallback_pos→立即fallback merge).</div>
+      </div>
+    </div>
+    <div class="msg vote opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">VOTE</span>
+          <span class="msg-time">2026-03-12 Step6-4</span>
+        </div>
+        <div class="msg-content">VOTE(7项,采纳Gemini REJECT): FIX-1改版—Zone C保留,fixed用MergePointParams(search_start=fallback_pos)→立即fallback; FIX-2 run.py传merge_policy; FIX-3修Sonnet BUG(anchor_event移到merge_policy后); FIX-4 lc_complete error只在flexible计入; FIX-5 merge_policy校验ValueError; FIX-6 command_builder不改; FIX-7测试</div>
       </div>
     </div>
   </div>

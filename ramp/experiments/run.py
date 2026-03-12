@@ -351,13 +351,13 @@ def run_experiment(
     feedback_vehicle_ids: set[str] = set()
     eligible_ramp_cav_ids: set[str] = set()
     lc_complete_vehicle_ids: set[str] = set()
-    anchor_event = resolve_anchor_event_type(merge_policy=merge_policy)
     latest_contract_by_vehicle: dict[str, str] = {}
     contract_by_id: dict[str, dict[str, float | str]] = {}
     feedback_rows: list[dict[str, str | float | int]] = []
     cross_feedback_indices: list[int] = []
     policy_variant_name = policy_variant if policy_variant else policy
     merge_policy = resolve_merge_policy(policy=policy, policy_variant=policy_variant_name)
+    anchor_event = resolve_anchor_event_type(merge_policy=merge_policy)
     merge_window_half_span_value = merge_window_half_span_s(
         policy=policy,
         step_length_s=step_length,
@@ -396,6 +396,7 @@ def run_experiment(
             delta_2_s=delta_2_s,
             main_vmax_mps=main_vmax_mps,
             ramp_vmax_mps=ramp_vmax_mps,
+            merge_policy=merge_policy,
             replan_interval_s=dp_replan_interval_s,
             aux_vmax_mps=aux_vmax_mps,
         )
@@ -930,6 +931,7 @@ def run_experiment(
                         actual_merge_position_m = float(control_zone_state[veh_id].get('d_to_merge', 0.0))
                         planned_actual_time_error_s: float | str = ''
                         planned_actual_position_error_m: float | str = ''
+                        lc_is_authoritative = merge_policy == MERGE_POLICY_FLEXIBLE
                         if contract_id:
                             expected_merge_time_s = float(
                                 contract_snapshot.get('expected_merge_time_s', sim_time)
@@ -943,11 +945,12 @@ def run_experiment(
                             planned_actual_position_error_m = (
                                 actual_merge_position_m - expected_merge_position_value
                             )
-                            planned_actual_time_errors.append(abs(planned_actual_time_error_s))
-                            planned_actual_position_errors.append(
-                                abs(planned_actual_position_error_m)
-                            )
-                            feedback_vehicle_ids.add(veh_id)
+                            if lc_is_authoritative:
+                                planned_actual_time_errors.append(abs(planned_actual_time_error_s))
+                                planned_actual_position_errors.append(
+                                    abs(planned_actual_position_error_m)
+                                )
+                                feedback_vehicle_ids.add(veh_id)
                         feedback_event_index += 1
                         feedback_rows.append(
                             {
