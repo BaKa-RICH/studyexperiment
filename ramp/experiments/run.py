@@ -33,6 +33,11 @@ from ramp.experiments.evidence_chain import (
 from ramp.runtime.controller import Controller
 from ramp.runtime.simulation_driver import SimulationDriver
 from ramp.runtime.state_collector import StateCollector
+from ramp.runtime.takeover import (
+    TakeoverMode,
+    log_mode_warning,
+    parse_takeover_mode,
+)
 from ramp.runtime.ttc import build_ttc_metrics, collect_ttc_samples
 
 
@@ -156,6 +161,7 @@ def run_experiment(
     cav_ratio: float = 0.5,
     policy_variant: str | None = None,
     ttc_warmup_s: float = 0.0,
+    takeover_mode: str = 'current',
 ) -> int:
     if duration_s <= 0:
         raise ValueError('duration-s must be > 0')
@@ -175,6 +181,9 @@ def run_experiment(
         raise ValueError('ttc-warmup-s must be >= 0')
     if policy not in {'no_control', 'fifo', 'dp', 'hierarchical'}:
         raise ValueError(f'Unsupported policy: {policy}')
+
+    takeover_mode_enum = parse_takeover_mode(takeover_mode)
+    log_mode_warning(takeover_mode_enum)
 
     _ensure_sumo_tools_on_path()
 
@@ -337,7 +346,11 @@ def run_experiment(
         )
 
     sim_driver = SimulationDriver(traci=traci, cmd=cmd)
-    controller = Controller(traci=traci, ramp_lc_target_lane=ramp_lc_target_lane)
+    controller = Controller(
+        traci=traci,
+        takeover_mode=takeover_mode_enum,
+        ramp_lc_target_lane=ramp_lc_target_lane,
+    )
     sim_driver.start()
     if policy == 'hierarchical':
         hier_collector = HierarchicalStateCollector(
@@ -397,7 +410,10 @@ def run_experiment(
                     )
                     ttc_longitudinal_samples.extend(longitudinal_samples)
                     ttc_merge_conflict_samples.extend(merge_conflict_samples)
-                controller.apply_lane_change_modes(control_zone_state=control_zone_state)
+                controller.apply_lane_change_modes(
+                    control_zone_state=control_zone_state,
+                    vehicle_types=hier_vehicle_types if policy == 'hierarchical' else None,
+                )
                 control_zone_ids = set(control_zone_state)
                 entered_this_step = control_zone_ids - prev_control_zone_ids
                 left_this_step = prev_control_zone_ids - control_zone_ids
@@ -875,7 +891,7 @@ def run_experiment(
                             'time': sim_time,
                             'event': 'speedmode_takeover',
                             'veh_id': veh_id,
-                            'detail': 'speed_mode=23',
+                            'detail': f'speed_mode={controller.config.speed_mode}',
                         }
                     )
                 for veh_id in sorted(controller_result.restored_ids):
@@ -965,6 +981,8 @@ def run_experiment(
         if speed_tracking_abs_errors
         else 0.0
     )
+    speed_error_p50_mps = _percentile(speed_tracking_abs_errors, 50) if speed_tracking_abs_errors else 0.0
+    speed_error_p95_mps = _percentile(speed_tracking_abs_errors, 95) if speed_tracking_abs_errors else 0.0
 
     consistency_merge_order_mismatch_count = 0
     cross_time_errors: list[float] = []
@@ -1057,7 +1075,10 @@ def run_experiment(
         'consistency_cross_time_error_mean_s': cross_time_error_mean_s,
         'consistency_cross_time_error_p95_s': cross_time_error_p95_s,
         'consistency_speed_tracking_mae_mps': speed_tracking_mae_mps,
+        'consistency_speed_error_p50_mps': speed_error_p50_mps,
+        'consistency_speed_error_p95_mps': speed_error_p95_mps,
         'consistency_plan_churn_rate': consistency_plan_churn_rate,
+        'takeover_mode': takeover_mode,
     }
     metrics.update(ttc_metrics)
     metrics.update(evidence_metrics)
@@ -1085,6 +1106,7 @@ def run_experiment(
         'aux_vmax_mps': aux_vmax_mps,
         'cav_ratio': cav_ratio,
         'ttc_warmup_s': ttc_warmup_s,
+        'takeover_mode': takeover_mode,
         'output_dir': str(out_path),
     }
     config_path.write_text(json.dumps(config, indent=2), encoding='utf-8')
@@ -1154,6 +1176,16 @@ def main() -> int:
         help='Warmup time before TTC sampling starts (seconds).',
     )
     parser.add_argument(
+        '--takeover-mode',
+        choices=['current', 'semi', 'strict', 'debug_upper_bound'],
+        default='current',
+        help=(
+            'CAV takeover level: current (T0, baseline), semi (T1, LC-sealed merge edge), '
+            'strict (T2, safe-speed off + slowDown), debug_upper_bound (T3, all SUMO checks off '
+            '[UNSAFE - debug only]).'
+        ),
+    )
+    parser.add_argument(
         '--gui',
         action='store_true',
         default=os.environ.get('SUMO_GUI', '0') in {'1', 'true', 'True'},
@@ -1183,6 +1215,7 @@ def main() -> int:
         cav_ratio=args.cav_ratio,
         policy_variant=args.policy_variant,
         ttc_warmup_s=args.ttc_warmup_s,
+        takeover_mode=args.takeover_mode,
     )
 
 

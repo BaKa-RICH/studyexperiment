@@ -1,5 +1,5 @@
 {
-  "title": "Todo 1.1 证据链日志与控制权量化 · 代码 Review",
+  "title": "experimental_reconstruction: Todo 1.1 Review + Todo 1.2 Takeover Ladder",
   "created": "2026-03-12T00:00:00",
   "main_agent": "Opus",
   "reviewers": ["GPT", "Sonnet", "Gemini"],
@@ -8,55 +8,55 @@
       "agent": "Opus",
       "type": "CONTEXT_SHARE",
       "time": "2026-03-12 Step1-1",
-      "content": "**Todo 1.1 上下文同步**\n\n已完成代码落地，核心改动：\n1. 新增 ramp/experiments/evidence_chain.py\n2. 修改 ramp/experiments/run.py\n3. 修改 ramp/runtime/controller.py\n4. 修改 ramp/experiments/summarize_metrics.py\n5. 新增 ramp/tests/test_evidence_chain.py\n\nQC 结果（120s, seed=1, hierarchical）：\n- control_command_actual_coverage_rate = 1.0 ✓\n- zone_c_action_chain_complete_rate = 1.0 ✓\n- merge_window_hit_rate = 0.975 ✓\n- predecessor_follower_match_rate = 0.0 ⚠️\n- planned_actual_position_error_p95_m = 582.57 ⚠️\n- speed_mismatch_anomaly_count = 1896 ⚠️"
-    },
-    {
-      "agent": "Opus",
-      "type": "PROPOSAL",
-      "time": "2026-03-12 Step1-2",
-      "content": "**Todo 1.1 代码 Review PROPOSAL — 共 10 项审查点**\n\n1. Schema 完整性\n2. predecessor_follower_match_rate = 0.0\n3. planned_actual_position_error_p95 = 582.57m\n4. speed_mismatch_anomaly_count = 1896\n5. _percentile 函数重复\n6. run_experiment() 约 940 行\n7. zone_a/zone_c event_rate = 0.0\n8. contract 每步刷新\n9. feedback 写入时序\n10. 模块解耦性"
-    },
-    {
-      "agent": "GPT",
-      "type": "REVIEW",
-      "time": "2026-03-12 Step1-3",
-      "content": "【GPT REVIEW】\n1) PASS  2) REJECT  3) REJECT  4) FLAG  5) FLAG  6) FLAG  7) FLAG  8) REJECT  9) FLAG  10) FLAG\n总体：FLAG — 功能通过，数据语义未闭合。P0: 2/3/8"
-    },
-    {
-      "agent": "Sonnet",
-      "type": "REVIEW",
-      "time": "2026-03-12 Step1-4",
-      "content": "【Sonnet REVIEW】\n1) FLAG  2) FLAG(需修)  3) REJECT  4) FLAG  5) FLAG  6) FLAG  7) FLAG  8) FLAG  9) PASS  10) FLAG\n总体：CONDITIONAL PASS。P0: 3/2。P1: 7/5"
-    },
-    {
-      "agent": "Gemini",
-      "type": "REVIEW",
-      "time": "2026-03-12 Step1-5",
-      "content": "【Gemini REVIEW】\n1) PASS  2) REJECT  3) REJECT  4) FLAG  5) FLAG  6) FLAG  7) FLAG  8) REJECT  9) FLAG  10) FLAG\n总体：REJECT — 3个致命缺陷(2/3/8)需Revision"
+      "content": "**Todo 1.1 上下文同步** — 已完成代码落地 + QC + 5项修复 + 双重验证。详见执行记录。"
     },
     {
       "agent": "Opus",
       "type": "VOTE",
       "time": "2026-03-12 Step1-6",
-      "content": "**四方投票汇总**\n\n| 审查点 | GPT | Sonnet | Gemini | 共识 |\n|--------|-----|--------|--------|------|\n| 3 position | REJECT | REJECT | REJECT | 全票REJECT |\n| 2 predecessor | REJECT | FLAG | REJECT | 多数REJECT |\n| 8 contract | REJECT | FLAG | REJECT | 多数REJECT |\n| 7 zone_c hack | FLAG | FLAG | FLAG | 全票FLAG |\n| 5 percentile | FLAG | FLAG | FLAG | 全票FLAG |\n\n决议：CONDITIONAL PASS with 5 MANDATORY FIXES\nP0-A: 坐标系统一(审3)\nP0-B: predecessor口径(审2)\nP0-C: contract生命周期(审8)\nP0-D: zone_c hack移除(审7)\nP1-A: percentile去重(审5)"
+      "content": "**Todo 1.1 四方投票**: CONDITIONAL PASS with 5 MANDATORY FIXES。5项修复均已落地并通过 Sonnet+Gemini VERIFIED。已 commit a6df98c 并 push。"
     },
     {
       "agent": "Opus",
-      "type": "EXECUTION",
-      "time": "2026-03-12 Step1-7",
-      "content": "**5项修复已全部落地**\n\nP0-A: expected_merge_position_m 改为纯策略函数(fixed=0.0, flex=20.0)。actual 在 cross_merge 用 0.0，lc_complete 用 d_to_merge。坐标系统一为 d_to_merge(距合流边的剩余距离)。\n\nP0-B: build_evidence_metrics 中 predecessor 匹配仅对 execution_state=='merge_cross' 行执行。\n\nP0-C: contract 仅在 plan_recomputed 或首次出现时创建(if plan_recomputed or veh_id not in latest_contract_by_vehicle)。\n\nP0-D: 移除 zone_c_action_count==0 时的 hack fallback。\n\nP1-A: run.py 中删除 _percentile 函数，改为从 evidence_chain 导入。\n\n单测全 6 项 PASS。"
+      "type": "CONTEXT_SHARE",
+      "time": "2026-03-12 Step2-1",
+      "content": "**Todo 1.2 上下文同步 — 当前接管机制分析**\n\nspeedMode=23, LC禁止仅main_h3部分, ramp lane_0无禁止(泄漏口), 无slowDown/setAcceleration使用。"
+    },
+    {
+      "agent": "Opus",
+      "type": "PROPOSAL",
+      "time": "2026-03-12 Step2-2",
+      "content": "**Todo 1.2 PROPOSAL: 四档接管梯子** T0(23/部分LC/setSpeed) -> T1(23/main_h3全CAV/setSpeed) -> T2(6/全控制区/setSpeed+slowDown) -> T3(0/全控制区/setSpeed)"
+    },
+    {
+      "agent": "GPT",
+      "type": "REVIEW",
+      "time": "2026-03-12 Step2-3",
+      "content": "speed_mode:FLAG, LC:FLAG, slowDown:FLAG(互斥+duration), 解耦:APPROVE, 升阶:FLAG, T3:REJECT常规/APPROVE debug。总体: CONDITIONAL APPROVE"
     },
     {
       "agent": "Sonnet",
       "type": "REVIEW",
-      "time": "2026-03-12 Step1-8",
-      "content": "【Sonnet 修复验证】\nP0-A: VERIFIED — 三处坐标系全部统一\nP0-B: VERIFIED — 逻辑正确，已补 execution_state 到测试\nP0-C: VERIFIED — 条件包裹正确\nP0-D: VERIFIED — hack 彻底清除\nP1-A: VERIFIED — 导入替代无重复定义\n总体：可以提交"
+      "time": "2026-03-12 Step2-4",
+      "content": "speed_mode:FLAG(T2改7/22), LC:APPROVE, slowDown:FLAG(duration=step无效), 解耦:APPROVE, 升阶:FLAG(静态CLI), T3:FLAG(需WARNING)。总体: APPROVE with conditions"
     },
     {
       "agent": "Gemini",
       "type": "REVIEW",
-      "time": "2026-03-12 Step1-9",
-      "content": "【Gemini 修复验证】\nP0-A: VERIFIED ✓\nP0-B: VERIFIED ✓\nP0-C: VERIFIED ✓\nP0-D: VERIFIED ✓\nP1-A: VERIFIED ✓\n总体：Ready to Commit。跨模块一致性良好。"
+      "time": "2026-03-12 Step2-5",
+      "content": "speed_mode:FLAG(T2改7), changeLane/LC:APPROVE, slowDown:FLAG(互斥), LC范围:APPROVE, T3:APPROVE(+碰撞检测), 解耦:APPROVE"
+    },
+    {
+      "agent": "Opus",
+      "type": "VOTE",
+      "time": "2026-03-12 Step2-6",
+      "content": "**决议: CONDITIONAL APPROVE — 3项必修**\nFIX-1: T2 speed_mode 6->22(仅多关safe_speed)\nFIX-2: slowDown互斥+duration公式化(max(1.0, delta/2.0))\nFIX-3: ControlCommand废弃字段标注"
+    },
+    {
+      "agent": "Opus",
+      "type": "EXECUTION",
+      "time": "2026-03-12 Step2-7",
+      "content": "**Todo 1.2 实现已完成**\n\n1. 新模块 ramp/runtime/takeover.py:\n   - TakeoverMode枚举(T0/T1/T2/T3)\n   - TakeoverConfig(frozen dataclass): speed_mode, LC禁止范围, slowDown标志\n   - TAKEOVER_CONFIGS dict: T0=23, T1=23, T2=22, T3=0\n   - slowdown_duration_s(): max(1.0, delta/COMFORTABLE_DECEL) 公式\n   - log_mode_warning(): T2打CAUTION, T3打UNSAFE WARNING\n   - parse_takeover_mode(): CLI字符串解析\n\n2. 修改 ramp/runtime/controller.py:\n   - Controller新增takeover_mode参数(TakeoverMode枚举)\n   - _takeover()使用config.speed_mode替代硬编码23\n   - apply()中T2模式: commanded<actual用slowDown, 否则setSpeed(互斥)\n   - apply_lane_change_modes()三级禁止: T0=原逻辑, T1=main_h3全CAV, T2/T3=全控制区CAV\n   - HDV过滤: T1/T2/T3的LC禁止跳过HDV\n   - ControllerApplyResult新增slowdown_ids字段\n\n3. 修改 ramp/runtime/types.py:\n   - ControlCommand中takeover_speed_mode_by_id和restore_speed_mode_ids标记deprecated\n\n4. 修改 ramp/experiments/run.py:\n   - 新增--takeover-mode CLI参数(current/semi/strict/debug_upper_bound)\n   - takeover_mode传入Controller\n   - config.json记录takeover_mode\n   - metrics.json新增speed_error_p50/p95\n   - events.csv中speedmode_takeover事件使用动态speed_mode值\n\n5. 新增 ramp/tests/test_takeover.py:\n   - 15项单元测试全PASS\n   - 覆盖: 枚举值、配置完整性、speed_mode位语义、LC禁止升级、slowDown标志、解析、duration公式、日志级别、frozen属性\n\n6. 回归验证: test_evidence_chain.py 全6项PASS\n\n**3项必修全部落地: FIX-1(T2=22) ✓ FIX-2(互斥+duration) ✓ FIX-3(deprecated标注) ✓**"
     }
   ]
 }

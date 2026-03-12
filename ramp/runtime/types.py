@@ -38,6 +38,9 @@ class Plan:
 class ControlCommand:
     set_speed_mps: dict[str, float] = field(default_factory=dict)
     release_ids: set[str] = field(default_factory=set)
+    # Deprecated: per-vehicle speed mode overrides are now handled by
+    # TakeoverConfig (ramp.runtime.takeover).  Retained for backward
+    # compatibility; policies should NOT populate these fields.
     takeover_speed_mode_by_id: dict[str, int] = field(default_factory=dict)
     restore_speed_mode_ids: set[str] = field(default_factory=set)
     lane_change_targets: dict[str, tuple[int, float]] = field(default_factory=dict)

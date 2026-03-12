@@ -3,7 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from ramp.runtime.takeover import (
+    TakeoverConfig,
+    TakeoverMode,
+    get_takeover_config,
+    slowdown_duration_s,
+)
 from ramp.runtime.types import ControlCommand
+
+
+LC_MODE_PROHIBIT_ALL = 0
 
 
 @dataclass(slots=True)
@@ -16,15 +25,20 @@ class ControllerApplyResult:
     lane_change_ids: set[str] = field(default_factory=set)
     lane_change_mode_override_ids: set[str] = field(default_factory=set)
     speed_mode_by_vehicle: dict[str, int] = field(default_factory=dict)
+    slowdown_ids: set[str] = field(default_factory=set)
 
 
 @dataclass(slots=True)
 class Controller:
     traci: Any
-    takeover_speed_mode: int = 23
+    takeover_mode: TakeoverMode = TakeoverMode.T0_CURRENT
     ramp_lc_target_lane: int = 1
     controlled_vehicle_ids: set[str] = field(default_factory=set)
     original_speed_mode_by_vehicle: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def config(self) -> TakeoverConfig:
+        return get_takeover_config(self.takeover_mode)
 
     def _is_commit_vehicle(self, veh_id: str) -> bool:
         road_id = str(self.traci.vehicle.getRoadID(veh_id))
@@ -37,7 +51,7 @@ class Controller:
             return False
         original = int(self.traci.vehicle.getSpeedMode(veh_id))
         self.original_speed_mode_by_vehicle[veh_id] = original
-        self.traci.vehicle.setSpeedMode(veh_id, self.takeover_speed_mode)
+        self.traci.vehicle.setSpeedMode(veh_id, self.config.speed_mode)
         return True
 
     def _restore(self, veh_id: str, active_vehicle_ids: set[str]) -> bool:
@@ -73,6 +87,7 @@ class Controller:
     def apply(
         self, *, command: ControlCommand, active_vehicle_ids: set[str]
     ) -> ControllerApplyResult:
+        cfg = self.config
         result = ControllerApplyResult()
         result.lane_change_mode_override_ids = self._apply_lane_change_mode_overrides(
             command=command, active_vehicle_ids=active_vehicle_ids
@@ -90,9 +105,16 @@ class Controller:
                 result.takeover_ids.add(veh_id)
             result.speed_command_ids.add(veh_id)
             if self._is_commit_vehicle(veh_id):
-                # Vehicle has entered the merge junction internal edge; do not re-brake it.
                 self.traci.vehicle.setSpeed(veh_id, -1)
                 result.commit_ids.add(veh_id)
+            elif cfg.use_slow_down_for_decel:
+                actual_speed = float(self.traci.vehicle.getSpeed(veh_id))
+                if speed_mps < actual_speed:
+                    dur = slowdown_duration_s(actual_speed, speed_mps)
+                    self.traci.vehicle.slowDown(veh_id, max(0.0, speed_mps), dur)
+                    result.slowdown_ids.add(veh_id)
+                else:
+                    self.traci.vehicle.setSpeed(veh_id, speed_mps)
             else:
                 self.traci.vehicle.setSpeed(veh_id, speed_mps)
             result.speed_mode_by_vehicle[veh_id] = int(self.traci.vehicle.getSpeedMode(veh_id))
@@ -111,14 +133,31 @@ class Controller:
         self,
         *,
         control_zone_state: dict[str, dict[str, float | str]],
+        vehicle_types: dict[str, str] | None = None,
     ) -> None:
-        LC_MODE_PROHIBIT_ALL = 0
+        cfg = self.config
+
+        if cfg.prohibit_lc_all_cav_in_control_zone:
+            for veh_id in control_zone_state:
+                vtype = (vehicle_types or {}).get(veh_id, '')
+                if vtype == 'hdv':
+                    continue
+                self.traci.vehicle.setLaneChangeMode(veh_id, LC_MODE_PROHIBIT_ALL)
+            return
+
         for veh_id, vehicle_state in control_zone_state.items():
             stream = str(vehicle_state['stream'])
             edge_id = str(vehicle_state['edge_id'])
             lane_id = str(vehicle_state['lane_id'])
             if edge_id != 'main_h3':
                 continue
+
+            if cfg.prohibit_lc_all_cav_on_merge_edge:
+                vtype = (vehicle_types or {}).get(veh_id, '')
+                if vtype != 'hdv':
+                    self.traci.vehicle.setLaneChangeMode(veh_id, LC_MODE_PROHIBIT_ALL)
+                continue
+
             if stream == 'main':
                 self.traci.vehicle.setLaneChangeMode(veh_id, LC_MODE_PROHIBIT_ALL)
             elif stream == 'ramp':
