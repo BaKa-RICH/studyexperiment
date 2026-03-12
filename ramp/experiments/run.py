@@ -981,8 +981,8 @@ def run_experiment(
         if speed_tracking_abs_errors
         else 0.0
     )
-    speed_error_p50_mps = _percentile(speed_tracking_abs_errors, 50) if speed_tracking_abs_errors else 0.0
-    speed_error_p95_mps = _percentile(speed_tracking_abs_errors, 95) if speed_tracking_abs_errors else 0.0
+    speed_error_p50_mps = _percentile(speed_tracking_abs_errors, 0.50) if speed_tracking_abs_errors else 0.0
+    speed_error_p95_mps = _percentile(speed_tracking_abs_errors, 0.95) if speed_tracking_abs_errors else 0.0
 
     consistency_merge_order_mismatch_count = 0
     cross_time_errors: list[float] = []
