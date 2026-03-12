@@ -26,7 +26,8 @@ def _make_metrics(**overrides) -> dict:
         'duration_s': 300.0,
         'entered_control_count': 50,
         'pending_unfinished_count': 5,
-        'fallback_rate': 0.05,
+        'avg_delay_at_merge_s': 1.5,
+        'scheduler_fallback_rate': 0.05,
         'replan_rate': 0.1,
     }
     base.update(overrides)
@@ -40,15 +41,16 @@ def test_extract_pain_indicators_basic():
     assert abs(ind['ttc_any_lt_3_0s_ratio'] - 0.1) < 1e-9
     assert abs(ind['merge_conflict_exposure'] - 5.0 / 300.0) < 1e-9
     assert abs(ind['cutoff_residual_ratio'] - 5.0 / 50.0) < 1e-9
-    assert abs(ind['fallback_rate'] - 0.05) < 1e-9
+    assert abs(ind['avg_delay_at_merge_s'] - 1.5) < 1e-9
+    assert abs(ind['scheduler_fallback_rate'] - 0.05) < 1e-9
     assert abs(ind['replan_rate'] - 0.1) < 1e-9
 
 
 def test_extract_pain_indicators_none_handling():
-    m = _make_metrics(ttc_any_lt_3_0s_ratio=None, fallback_rate=None)
+    m = _make_metrics(ttc_any_lt_3_0s_ratio=None, scheduler_fallback_rate=None)
     ind = extract_pain_indicators(m)
     assert ind['ttc_any_lt_3_0s_ratio'] == 0.0
-    assert ind['fallback_rate'] == 0.0
+    assert ind['scheduler_fallback_rate'] == 0.0
 
 
 def test_extract_pain_indicators_zero_entered():
@@ -83,7 +85,7 @@ def test_compute_pain_score_from_metrics_basic():
     h0_m = _make_metrics()
     h1_m = _make_metrics(
         ttc_any_lt_3_0s_ratio=0.2,
-        fallback_rate=0.15,
+        scheduler_fallback_rate=0.15,
         replan_rate=0.2,
     )
     result = compute_pain_score_from_metrics(h1_m, h0_m)

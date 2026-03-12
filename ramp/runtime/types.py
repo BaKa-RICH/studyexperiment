@@ -32,6 +32,7 @@ class Plan:
     order: list[str] = field(default_factory=list)
     target_cross_time_s: dict[str, float] = field(default_factory=dict)
     eta_s: dict[str, float] = field(default_factory=dict)
+    scheduler_fallback: bool = False
 
 
 @dataclass(slots=True)

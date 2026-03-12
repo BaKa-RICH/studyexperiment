@@ -3,6 +3,8 @@ import csv
 import json
 import logging
 import os
+
+logger = logging.getLogger(__name__)
 import shutil
 import sys
 import time
@@ -1177,6 +1179,7 @@ def run_experiment(
         'policy_name': policy,
         'policy_variant': policy_variant_name,
         'metrics_schema_version': 'v3_evidence_chain',
+        'duration_s': duration_s,
         'ttc_warmup_s': ttc_warmup_s,
         'merge_success_rate': merge_success_rate,
         'avg_delay_at_merge_s': avg_delay,
@@ -1199,6 +1202,16 @@ def run_experiment(
     metrics.update(ttc_metrics)
     metrics.update(evidence_metrics)
     metrics['contract_smoke_summary'] = contract_smoke_summary
+
+    if hier_scheduler is not None:
+        metrics['scheduler_fallback_count'] = hier_scheduler.scheduler_fallback_count
+        metrics['scheduler_replan_count'] = hier_scheduler.scheduler_replan_count
+        metrics['scheduler_fallback_rate'] = (
+            hier_scheduler.scheduler_fallback_count / hier_scheduler.scheduler_replan_count
+            if hier_scheduler.scheduler_replan_count > 0
+            else 0.0
+        )
+
     metrics_path.write_text(json.dumps(metrics, indent=2), encoding='utf-8')
 
     config = {

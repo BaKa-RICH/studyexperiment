@@ -124,7 +124,7 @@ def _compute_plan_once(
         key=lambda v: (eta_s[v], v),
     )
 
-    dp_result = _try_dp_mixed_with_fallback(
+    dp_result, fallback_occurred = _try_dp_mixed_with_fallback(
         main_seq=main_seq,
         ramp_seq=ramp_seq,
         veh_type_by_id=veh_type_by_id,
@@ -146,6 +146,7 @@ def _compute_plan_once(
         order=dp_result.passing_order,
         target_cross_time_s=dict(dp_result.target_cross_time_s),
         eta_s=plan_eta,
+        scheduler_fallback=fallback_occurred,
     )
 
 
@@ -160,9 +161,13 @@ def _try_dp_mixed_with_fallback(
     delta_1_s: float,
     delta_2_s: float,
 ):
-    """Try dp_mixed_schedule; on infeasible HDV constraints fall back to all-CAV dp_schedule."""
+    """Try dp_mixed_schedule; on infeasible HDV constraints fall back to all-CAV dp_schedule.
+
+    Returns ``(schedule_result, fallback_occurred)`` so the caller can
+    track how often the mixed scheduler is infeasible.
+    """
     try:
-        return dp_mixed_schedule(
+        result = dp_mixed_schedule(
             main_seq=main_seq,
             ramp_seq=ramp_seq,
             veh_type_by_id=veh_type_by_id,
@@ -171,6 +176,7 @@ def _try_dp_mixed_with_fallback(
             delta_1_s=delta_1_s,
             delta_2_s=delta_2_s,
         )
+        return result, False
     except (ValueError, KeyError) as exc:
         logger.warning(
             'dp_mixed_schedule failed (%s), falling back to CAV-only dp_schedule',
@@ -183,14 +189,14 @@ def _try_dp_mixed_with_fallback(
             t_min_cav_only[veh_id] = eta_s.get(veh_id, 0.0)
         if not cav_main and not cav_ramp:
             from ramp.scheduler.dp import ScheduleResult
-            return ScheduleResult([], {}, 0.0, 0.0, 0.0)
+            return ScheduleResult([], {}, 0.0, 0.0, 0.0), True
         return dp_schedule(
             main_seq=cav_main,
             ramp_seq=cav_ramp,
             t_min_s=t_min_cav_only,
             delta_1_s=delta_1_s,
             delta_2_s=delta_2_s,
-        )
+        ), True
 
 
 @dataclass
@@ -211,6 +217,8 @@ class HierarchicalScheduler:
     _last_zone_a_time_s: float | None = None
     zone_a_actions: dict[str, tuple[int, float]] = field(default_factory=dict)
     zone_c_actions: dict[str, tuple[int, float]] = field(default_factory=dict)
+    scheduler_fallback_count: int = 0
+    scheduler_replan_count: int = 0
 
     def __post_init__(self) -> None:
         if self.merge_policy not in (MERGE_POLICY_FIXED, MERGE_POLICY_FLEXIBLE):
@@ -282,6 +290,9 @@ class HierarchicalScheduler:
             )
             self._last_replan_time_s = sim_time_s
             self.replanned_last_call = True
+            self.scheduler_replan_count += 1
+            if self._cached_plan is not None and self._cached_plan.scheduler_fallback:
+                self.scheduler_fallback_count += 1
 
         # --- Zone C: merge point management (every step) ---
         if self._merge_point_mgr is not None and zone_c_lane1_vehicles is not None:

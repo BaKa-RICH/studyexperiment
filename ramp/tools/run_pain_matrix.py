@@ -36,6 +36,8 @@ WORLDS: dict[str, dict[str, float]] = {
     'H0_normal': {'hdv_normal': 1.0},
     'H1a_distracted': {'hdv_normal': 0.5, 'hdv_distracted': 0.5},
     'H1b_aggressive': {'hdv_normal': 0.5, 'hdv_aggressive': 0.5},
+    'H1c_hesitant': {'hdv_hesitant': 1.0},
+    'H1d_stress_mix': {'hdv_distracted': 0.5, 'hdv_hesitant': 0.5},
 }
 
 DEFAULT_SEEDS: list[int] = [1, 2, 3]

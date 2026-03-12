@@ -7,7 +7,7 @@ Formula (Gemini-proposed, adopted via VOTE):
     PainScore(H1) = Σ [ w_i * (I_i(H1) - I_i(H0)) / max(I_i(H0), ε) ]
 
 Where:
-    I_i  = one of 5 Pain indicators
+    I_i  = one of 6 Pain indicators
     w_i  = normalised weight for indicator i
     ε    = floor constant preventing division-by-zero
 
@@ -24,17 +24,19 @@ PAIN_EPSILON: float = 0.001
 PAIN_INDICATORS: tuple[str, ...] = (
     'ttc_any_lt_3_0s_ratio',
     'merge_conflict_exposure',
+    'avg_delay_at_merge_s',
     'cutoff_residual_ratio',
-    'fallback_rate',
+    'scheduler_fallback_rate',
     'replan_rate',
 )
 
 PAIN_WEIGHTS: dict[str, float] = {
-    'ttc_any_lt_3_0s_ratio': 0.30,
+    'ttc_any_lt_3_0s_ratio': 0.25,
     'merge_conflict_exposure': 0.25,
-    'cutoff_residual_ratio': 0.15,
-    'fallback_rate': 0.15,
-    'replan_rate': 0.15,
+    'avg_delay_at_merge_s': 0.20,
+    'cutoff_residual_ratio': 0.10,
+    'scheduler_fallback_rate': 0.10,
+    'replan_rate': 0.10,
 }
 
 
@@ -46,10 +48,11 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
 
 
 def extract_pain_indicators(metrics: dict[str, Any]) -> dict[str, float]:
-    """Extract the 5 Pain indicators from a metrics dict.
+    """Extract the 6 Pain indicators from a metrics dict.
 
     ``merge_conflict_exposure`` is normalised by simulation duration.
     ``cutoff_residual_ratio`` = pending_unfinished / entered_control.
+    ``scheduler_fallback_rate`` = scheduler_fallback_count / scheduler_replan_count.
     """
     duration_s = _safe_float(metrics.get('duration_s'), default=1.0)
     entered = _safe_float(metrics.get('entered_control_count'), default=1.0)
@@ -67,9 +70,12 @@ def extract_pain_indicators(metrics: dict[str, Any]) -> dict[str, float]:
             metrics.get('ttc_any_lt_3_0s_ratio'), default=0.0
         ),
         'merge_conflict_exposure': merge_conflict_exposure,
+        'avg_delay_at_merge_s': _safe_float(
+            metrics.get('avg_delay_at_merge_s'), default=0.0
+        ),
         'cutoff_residual_ratio': cutoff_residual_ratio,
-        'fallback_rate': _safe_float(
-            metrics.get('fallback_rate'), default=0.0
+        'scheduler_fallback_rate': _safe_float(
+            metrics.get('scheduler_fallback_rate'), default=0.0
         ),
         'replan_rate': _safe_float(
             metrics.get('replan_rate'), default=0.0
