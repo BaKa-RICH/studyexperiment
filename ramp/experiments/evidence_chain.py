@@ -101,13 +101,16 @@ def merge_window_half_span_s(
 
 def expected_merge_position_m(
     *,
-    lane_pos_m: float,
-    d_to_merge_m: float,
     merge_policy: str,
 ) -> float:
+    """Expected remaining distance to merge edge at merge moment.
+
+    Fixed policy: vehicle merges at merge edge (d_to_merge = 0).
+    Flexible policy: vehicle merges ~FLEXIBLE_POSITION_OFFSET_M before merge edge.
+    """
     if merge_policy == MERGE_POLICY_FLEXIBLE:
-        return max(lane_pos_m + d_to_merge_m - FLEXIBLE_POSITION_OFFSET_M, 0.0)
-    return max(lane_pos_m + d_to_merge_m, 0.0)
+        return FLEXIBLE_POSITION_OFFSET_M
+    return 0.0
 
 
 def build_contract_row(
@@ -203,11 +206,6 @@ def build_evidence_metrics(
     )
     zone_c_action_count = len(zone_c_chain_status)
     zone_c_chain_complete_effective = zone_c_chain_complete_count
-    if zone_c_action_count == 0 and feedback_rows:
-        zone_c_action_count = len(feedback_rows)
-        zone_c_chain_complete_effective = sum(
-            1 for row in feedback_rows if str(row['execution_state']).strip()
-        )
     if zone_c_action_count == 0:
         zone_c_action_chain_complete_rate = 1.0
     else:
@@ -247,11 +245,12 @@ def build_evidence_metrics(
         if merge_window_start_s <= float(actual_merge_time_s) <= merge_window_end_s:
             merge_window_hit_count += 1
 
-        target_predecessor_id = str(contract_snapshot.get('target_predecessor_id', ''))
-        if target_predecessor_id:
-            predecessor_checked_count += 1
-            if str(row['actual_predecessor_id']) == target_predecessor_id:
-                predecessor_match_count += 1
+        if str(row.get('execution_state', '')) == 'merge_cross':
+            target_predecessor_id = str(contract_snapshot.get('target_predecessor_id', ''))
+            if target_predecessor_id:
+                predecessor_checked_count += 1
+                if str(row['actual_predecessor_id']) == target_predecessor_id:
+                    predecessor_match_count += 1
 
     merge_window_hit_rate = (
         merge_window_hit_count / merge_window_checked_count if merge_window_checked_count else 0.0

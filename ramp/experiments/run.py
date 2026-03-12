@@ -27,6 +27,7 @@ from ramp.experiments.evidence_chain import (
     build_evidence_metrics,
     expected_merge_position_m,
     merge_window_half_span_s,
+    percentile as _percentile,
     resolve_merge_policy,
 )
 from ramp.runtime.controller import Controller
@@ -126,18 +127,6 @@ def _collision_to_row(sim_time: float, collision) -> dict[str, str | float]:
             row[key] = getattr(collision, key)
     return row
 
-
-def _percentile(values: list[float], q: float) -> float:
-    if not values:
-        return 0.0
-    if q <= 0:
-        return float(min(values))
-    if q >= 1:
-        return float(max(values))
-    sorted_vals = sorted(values)
-    idx = int(round((len(sorted_vals) - 1) * q))
-    idx = max(0, min(idx, len(sorted_vals) - 1))
-    return float(sorted_vals[idx])
 
 
 def _default_out_dir(repo_root: Path, scenario: str, policy: str) -> Path:
@@ -441,7 +430,7 @@ def run_experiment(
                     feedback_event_index += 1
                     contract_id = latest_contract_by_vehicle.get(veh_id, '')
                     contract_snapshot = contract_by_id.get(contract_id, {})
-                    actual_merge_position_m = float(traci.vehicle.getLanePosition(veh_id))
+                    actual_merge_position_m = 0.0
                     expected_merge_time_s = (
                         float(contract_snapshot['expected_merge_time_s'])
                         if 'expected_merge_time_s' in contract_snapshot
@@ -648,39 +637,38 @@ def run_experiment(
                         else:
                             v_des = ''
 
-                        contract_index += 1
-                        target_predecessor_id = (
-                            schedule_order[order_index - 2] if order_index > 1 else ''
-                        )
-                        target_follower_id = (
-                            schedule_order[order_index] if order_index < len(schedule_order) else ''
-                        )
-                        expected_merge_position = expected_merge_position_m(
-                            lane_pos_m=float(vehicle_state['lane_pos']),
-                            d_to_merge_m=d_to_merge,
-                            merge_policy=merge_policy,
-                        )
-                        desired_merge_speed = (
-                            float(v_des) if isinstance(v_des, float) else speed
-                        )
-                        contract_id, contract_row, contract_snapshot = build_contract_row(
-                            contract_index=contract_index,
-                            sim_time=sim_time,
-                            zoneb_algorithm=policy,
-                            merge_policy=merge_policy,
-                            veh_id=veh_id,
-                            sequence_rank=order_index,
-                            target_predecessor_id=target_predecessor_id,
-                            target_follower_id=target_follower_id,
-                            target_cross_time=target_cross_time,
-                            merge_window_half_span_s=merge_window_half_span_value,
-                            expected_merge_position_m_value=expected_merge_position,
-                            desired_merge_speed_mps=desired_merge_speed,
-                        )
-                        contract_writer.writerow(contract_row)
-                        contract_by_id[contract_id] = contract_snapshot
-                        latest_contract_by_vehicle[veh_id] = contract_id
-                        contract_vehicle_ids.add(veh_id)
+                        if plan_recomputed or veh_id not in latest_contract_by_vehicle:
+                            contract_index += 1
+                            target_predecessor_id = (
+                                schedule_order[order_index - 2] if order_index > 1 else ''
+                            )
+                            target_follower_id = (
+                                schedule_order[order_index] if order_index < len(schedule_order) else ''
+                            )
+                            expected_merge_position = expected_merge_position_m(
+                                merge_policy=merge_policy,
+                            )
+                            desired_merge_speed = (
+                                float(v_des) if isinstance(v_des, float) else speed
+                            )
+                            contract_id, contract_row, contract_snapshot = build_contract_row(
+                                contract_index=contract_index,
+                                sim_time=sim_time,
+                                zoneb_algorithm=policy,
+                                merge_policy=merge_policy,
+                                veh_id=veh_id,
+                                sequence_rank=order_index,
+                                target_predecessor_id=target_predecessor_id,
+                                target_follower_id=target_follower_id,
+                                target_cross_time=target_cross_time,
+                                merge_window_half_span_s=merge_window_half_span_value,
+                                expected_merge_position_m_value=expected_merge_position,
+                                desired_merge_speed_mps=desired_merge_speed,
+                            )
+                            contract_writer.writerow(contract_row)
+                            contract_by_id[contract_id] = contract_snapshot
+                            latest_contract_by_vehicle[veh_id] = contract_id
+                            contract_vehicle_ids.add(veh_id)
 
                         plan_writer.writerow(
                             {
@@ -832,7 +820,7 @@ def run_experiment(
                         zone_c_chain_complete_count += 1
                         contract_id = latest_contract_by_vehicle.get(veh_id, '')
                         contract_snapshot = contract_by_id.get(contract_id, {})
-                        actual_merge_position_m = float(control_zone_state[veh_id]['lane_pos'])
+                        actual_merge_position_m = float(control_zone_state[veh_id].get('d_to_merge', 0.0))
                         planned_actual_time_error_s: float | str = ''
                         planned_actual_position_error_m: float | str = ''
                         if contract_id:

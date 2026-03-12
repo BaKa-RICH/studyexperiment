@@ -66,6 +66,7 @@ def test_build_evidence_metrics_core_rates() -> None:
     feedback_rows = [
         {
             'contract_id': 'contract_00000001',
+            'execution_state': 'merge_cross',
             'actual_merge_time_s': 12.0,
             'actual_predecessor_id': 'veh_prev',
             'fallback_reason': '',
@@ -73,6 +74,7 @@ def test_build_evidence_metrics_core_rates() -> None:
         },
         {
             'contract_id': 'contract_00000002',
+            'execution_state': 'merge_cross',
             'actual_merge_time_s': 20.0,
             'actual_predecessor_id': '',
             'fallback_reason': 'zone_c_chain_incomplete',
@@ -116,15 +118,11 @@ def test_build_evidence_metrics_core_rates() -> None:
 
 def test_expected_merge_position_m() -> None:
     assert expected_merge_position_m(
-        lane_pos_m=100.0,
-        d_to_merge_m=50.0,
         merge_policy=MERGE_POLICY_FIXED,
-    ) == 150.0
+    ) == 0.0
     assert expected_merge_position_m(
-        lane_pos_m=100.0,
-        d_to_merge_m=50.0,
         merge_policy=MERGE_POLICY_FLEXIBLE,
-    ) == 130.0
+    ) == 20.0
 
 
 def test_merge_window_half_span_s() -> None:
