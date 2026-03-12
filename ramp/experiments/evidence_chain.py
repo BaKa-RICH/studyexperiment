@@ -221,6 +221,55 @@ def attach_actual_neighbors(
         row['actual_follower_id'] = next_vehicle_id
 
 
+def build_contract_smoke_summary(
+    *,
+    contract_by_id: dict[str, dict[str, float | str]],
+) -> dict[str, float | int]:
+    """Validate contract completeness and generate Q2 smoke summary.
+
+    Returns a dict with contract-level quality metrics that must be checked
+    before entering the Zone C execution closed-loop.
+    """
+    total = len(contract_by_id)
+    if total == 0:
+        return {
+            'total_contracts': 0,
+            'field_completeness_rate': 0.0,
+            'merge_window_validity_rate': 0.0,
+            'target_predecessor_coverage': 0.0,
+            'target_follower_coverage': 0.0,
+        }
+    required_snapshot_keys = (
+        'expected_merge_time_s', 'expected_merge_position_m',
+        'merge_window_start_s', 'merge_window_end_s',
+    )
+    complete_count = 0
+    window_valid_count = 0
+    predecessor_present_count = 0
+    follower_present_count = 0
+    for snapshot in contract_by_id.values():
+        all_present = all(
+            str(snapshot.get(k, '')).strip() != '' for k in required_snapshot_keys
+        )
+        if all_present:
+            complete_count += 1
+        start = snapshot.get('merge_window_start_s', '')
+        end = snapshot.get('merge_window_end_s', '')
+        if start != '' and end != '' and float(end) > float(start):
+            window_valid_count += 1
+        if str(snapshot.get('target_predecessor_id', '')).strip():
+            predecessor_present_count += 1
+        if str(snapshot.get('target_follower_id', '')).strip():
+            follower_present_count += 1
+    return {
+        'total_contracts': total,
+        'field_completeness_rate': complete_count / total,
+        'merge_window_validity_rate': window_valid_count / total,
+        'target_predecessor_coverage': predecessor_present_count / total,
+        'target_follower_coverage': follower_present_count / total,
+    }
+
+
 def build_evidence_metrics(
     *,
     duration_s: float,
@@ -269,6 +318,8 @@ def build_evidence_metrics(
     merge_window_checked_count = 0
     predecessor_match_count = 0
     predecessor_checked_count = 0
+    follower_match_count = 0
+    follower_checked_count = 0
     fallback_counter: Counter[str] = Counter()
     replan_required_count = 0
 
@@ -300,14 +351,21 @@ def build_evidence_metrics(
                 predecessor_checked_count += 1
                 if str(row['actual_predecessor_id']) == target_predecessor_id:
                     predecessor_match_count += 1
+            target_follower_id = str(contract_snapshot.get('target_follower_id', ''))
+            if target_follower_id:
+                follower_checked_count += 1
+                if str(row['actual_follower_id']) == target_follower_id:
+                    follower_match_count += 1
 
     merge_window_hit_rate = (
         merge_window_hit_count / merge_window_checked_count if merge_window_checked_count else 0.0
     )
-    if predecessor_checked_count == 0:
+    pf_total_checked = predecessor_checked_count + follower_checked_count
+    pf_total_matched = predecessor_match_count + follower_match_count
+    if pf_total_checked == 0:
         predecessor_follower_match_rate = 1.0
     else:
-        predecessor_follower_match_rate = predecessor_match_count / predecessor_checked_count
+        predecessor_follower_match_rate = pf_total_matched / pf_total_checked
 
     fallback_rate_by_reason: dict[str, float] = {}
     for reason, count in sorted(fallback_counter.items()):

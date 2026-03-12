@@ -77,6 +77,7 @@ def test_build_evidence_metrics_core_rates() -> None:
             'execution_state': 'merge_cross',
             'actual_merge_time_s': 12.0,
             'actual_predecessor_id': 'veh_prev',
+            'actual_follower_id': '',
             'fallback_reason': '',
             'replan_required': 0,
         },
@@ -85,6 +86,7 @@ def test_build_evidence_metrics_core_rates() -> None:
             'execution_state': 'merge_cross',
             'actual_merge_time_s': 20.0,
             'actual_predecessor_id': '',
+            'actual_follower_id': '',
             'fallback_reason': 'zone_c_chain_incomplete',
             'replan_required': 1,
         },
@@ -294,3 +296,164 @@ def test_anchor_event_constants() -> None:
     assert ANCHOR_EVENT_CROSS_MERGE == 'cross_merge'
     assert ANCHOR_EVENT_LC_COMPLETE == 'lc_complete'
     assert ANCHOR_EVENT_CROSS_MERGE_FALLBACK == 'cross_merge_fallback'
+
+
+# --- Todo 2.3 tests ---
+
+def test_contract_smoke_summary_empty() -> None:
+    from ramp.experiments.evidence_chain import build_contract_smoke_summary
+    summary = build_contract_smoke_summary(contract_by_id={})
+    assert summary['total_contracts'] == 0
+    assert summary['field_completeness_rate'] == 0.0
+
+
+def test_contract_smoke_summary_complete() -> None:
+    from ramp.experiments.evidence_chain import build_contract_smoke_summary
+    contracts = {
+        'c1': {
+            'expected_merge_time_s': 50.0,
+            'expected_merge_position_m': 0.0,
+            'merge_window_start_s': 48.0,
+            'merge_window_end_s': 52.0,
+            'target_predecessor_id': 'v1',
+            'target_follower_id': 'v3',
+        },
+    }
+    summary = build_contract_smoke_summary(contract_by_id=contracts)
+    assert summary['total_contracts'] == 1
+    assert summary['field_completeness_rate'] == 1.0
+    assert summary['merge_window_validity_rate'] == 1.0
+    assert summary['target_predecessor_coverage'] == 1.0
+    assert summary['target_follower_coverage'] == 1.0
+
+
+def test_contract_smoke_summary_partial() -> None:
+    from ramp.experiments.evidence_chain import build_contract_smoke_summary
+    contracts = {
+        'c1': {
+            'expected_merge_time_s': 50.0,
+            'expected_merge_position_m': 0.0,
+            'merge_window_start_s': 48.0,
+            'merge_window_end_s': 52.0,
+            'target_predecessor_id': '',
+            'target_follower_id': 'v3',
+        },
+        'c2': {
+            'expected_merge_time_s': 60.0,
+            'expected_merge_position_m': 20.0,
+            'merge_window_start_s': 58.0,
+            'merge_window_end_s': 62.0,
+            'target_predecessor_id': 'v1',
+            'target_follower_id': '',
+        },
+    }
+    summary = build_contract_smoke_summary(contract_by_id=contracts)
+    assert summary['total_contracts'] == 2
+    assert summary['field_completeness_rate'] == 1.0
+    assert summary['target_predecessor_coverage'] == 0.5
+    assert summary['target_follower_coverage'] == 0.5
+
+
+def test_predecessor_follower_match_rate_with_follower() -> None:
+    feedback = [
+        {
+            'contract_id': 'c1', 'execution_state': 'merge_cross',
+            'actual_merge_time_s': 50.0, 'actual_predecessor_id': 'v1',
+            'actual_follower_id': 'v3', 'fallback_reason': '', 'replan_required': 0,
+        },
+    ]
+    contracts = {
+        'c1': {
+            'target_predecessor_id': 'v1', 'target_follower_id': 'v3',
+            'merge_window_start_s': 48.0, 'merge_window_end_s': 52.0,
+        },
+    }
+    metrics = build_evidence_metrics(
+        duration_s=120.0, controlled_cav_steps=10, covered_control_cav_steps=10,
+        autonomous_lane_change_detected_count=0, speed_mismatch_detected_count=0,
+        zone_a_event_count=0, zone_c_event_count=0,
+        zone_c_chain_status={}, zone_c_chain_complete_count=0,
+        contract_vehicle_ids={'v2'}, feedback_vehicle_ids=set(),
+        feedback_rows=feedback, contract_by_id=contracts,
+        planned_actual_time_errors=[], planned_actual_position_errors=[],
+    )
+    assert metrics['predecessor_follower_match_rate'] == 1.0
+
+
+def test_predecessor_follower_match_rate_mismatch() -> None:
+    feedback = [
+        {
+            'contract_id': 'c1', 'execution_state': 'merge_cross',
+            'actual_merge_time_s': 50.0, 'actual_predecessor_id': 'v1',
+            'actual_follower_id': 'wrong', 'fallback_reason': '', 'replan_required': 0,
+        },
+    ]
+    contracts = {
+        'c1': {
+            'target_predecessor_id': 'v1', 'target_follower_id': 'v3',
+            'merge_window_start_s': 48.0, 'merge_window_end_s': 52.0,
+        },
+    }
+    metrics = build_evidence_metrics(
+        duration_s=120.0, controlled_cav_steps=10, covered_control_cav_steps=10,
+        autonomous_lane_change_detected_count=0, speed_mismatch_detected_count=0,
+        zone_a_event_count=0, zone_c_event_count=0,
+        zone_c_chain_status={}, zone_c_chain_complete_count=0,
+        contract_vehicle_ids={'v2'}, feedback_vehicle_ids=set(),
+        feedback_rows=feedback, contract_by_id=contracts,
+        planned_actual_time_errors=[], planned_actual_position_errors=[],
+    )
+    assert metrics['predecessor_follower_match_rate'] == 0.5
+
+
+def test_predecessor_follower_match_rate_empty_target_skipped() -> None:
+    feedback = [
+        {
+            'contract_id': 'c1', 'execution_state': 'merge_cross',
+            'actual_merge_time_s': 50.0, 'actual_predecessor_id': 'v1',
+            'actual_follower_id': '', 'fallback_reason': '', 'replan_required': 0,
+        },
+    ]
+    contracts = {
+        'c1': {
+            'target_predecessor_id': 'v1', 'target_follower_id': '',
+            'merge_window_start_s': 48.0, 'merge_window_end_s': 52.0,
+        },
+    }
+    metrics = build_evidence_metrics(
+        duration_s=120.0, controlled_cav_steps=10, covered_control_cav_steps=10,
+        autonomous_lane_change_detected_count=0, speed_mismatch_detected_count=0,
+        zone_a_event_count=0, zone_c_event_count=0,
+        zone_c_chain_status={}, zone_c_chain_complete_count=0,
+        contract_vehicle_ids={'v2'}, feedback_vehicle_ids=set(),
+        feedback_rows=feedback, contract_by_id=contracts,
+        planned_actual_time_errors=[], planned_actual_position_errors=[],
+    )
+    assert metrics['predecessor_follower_match_rate'] == 1.0
+
+
+def test_merge_history_includes_gap_lead_follow() -> None:
+    from ramp.policies.hierarchical.merge_point import (
+        MergePointManager,
+        MergePointParams,
+        VehicleState,
+    )
+    params = MergePointParams(search_start_pos_m=10.0, fallback_buffer_m=50.0)
+    mgr = MergePointManager(params=params)
+
+    cav_states = {
+        'cav_1': VehicleState(edge_id='main_h3', lane_index=0, lane_pos_m=260.0, speed_mps=15.0),
+    }
+    lane1_vehicles = [('main_1', 300.0, 15.0), ('main_2', 200.0, 15.0)]
+    mgr.update(sim_time_s=10.0, cav_states=cav_states, lane1_vehicles=lane1_vehicles)
+
+    cav_states_merged = {
+        'cav_1': VehicleState(edge_id='main_h3', lane_index=1, lane_pos_m=270.0, speed_mps=15.0),
+    }
+    mgr.update(sim_time_s=13.5, cav_states=cav_states_merged, lane1_vehicles=lane1_vehicles)
+
+    assert len(mgr.merge_history) == 1
+    entry = mgr.merge_history[0]
+    assert entry['veh_id'] == 'cav_1'
+    assert 'gap_lead_id' in entry
+    assert 'gap_follow_id' in entry

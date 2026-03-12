@@ -270,14 +270,14 @@ class MergePointManager:
                         '[MergePoint] %s MERGED at t=%.1fs pos=%.1fm',
                         veh_id, sim_time_s, vs.lane_pos_m,
                     )
+                    last_eval = tracker.last_eval
                     self.merge_history.append({
                         'veh_id': veh_id,
                         'merge_time_s': sim_time_s,
                         'merge_pos_m': vs.lane_pos_m,
-                        'is_fallback': (
-                            tracker.last_eval.is_fallback
-                            if tracker.last_eval else False
-                        ),
+                        'is_fallback': last_eval.is_fallback if last_eval else False,
+                        'gap_lead_id': last_eval.lead_id if last_eval else None,
+                        'gap_follow_id': last_eval.follow_id if last_eval else None,
                     })
                 elif (
                     tracker.merge_start_time_s is not None

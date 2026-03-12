@@ -28,6 +28,7 @@ from ramp.experiments.evidence_chain import (
     SPEED_MISMATCH_THRESHOLD_MPS,
     attach_actual_neighbors,
     build_contract_row,
+    build_contract_smoke_summary,
     build_evidence_metrics,
     expected_merge_position_m,
     merge_window_half_span_s,
@@ -573,7 +574,7 @@ def run_experiment(
                             'planned_actual_time_error_s': planned_actual_time_error_s,
                             'planned_actual_position_error_m': planned_actual_position_error_m,
                             'fallback_reason': fallback_reason,
-                            'replan_required': 0,
+                            'replan_required': int(plan_recomputed),
                         }
                     )
                     cross_feedback_indices.append(len(feedback_rows) - 1)
@@ -951,6 +952,17 @@ def run_experiment(
                                     abs(planned_actual_position_error_m)
                                 )
                                 feedback_vehicle_ids.add(veh_id)
+                        lc_gap_lead_id = ''
+                        lc_gap_follow_id = ''
+                        lc_fallback_reason = ''
+                        if hier_scheduler is not None and hier_scheduler._merge_point_mgr is not None:
+                            for hist in reversed(hier_scheduler._merge_point_mgr.merge_history):
+                                if hist['veh_id'] == veh_id:
+                                    lc_gap_lead_id = hist.get('gap_lead_id', '') or ''
+                                    lc_gap_follow_id = hist.get('gap_follow_id', '') or ''
+                                    if hist.get('is_fallback', False):
+                                        lc_fallback_reason = 'position_fallback'
+                                    break
                         feedback_event_index += 1
                         feedback_rows.append(
                             {
@@ -965,11 +977,11 @@ def run_experiment(
                                 'gap_reject_reason': '',
                                 'actual_merge_time_s': sim_time,
                                 'actual_merge_position_m': actual_merge_position_m,
-                                'actual_predecessor_id': '',
-                                'actual_follower_id': '',
+                                'actual_predecessor_id': lc_gap_lead_id,
+                                'actual_follower_id': lc_gap_follow_id,
                                 'planned_actual_time_error_s': planned_actual_time_error_s,
                                 'planned_actual_position_error_m': planned_actual_position_error_m,
-                                'fallback_reason': '',
+                                'fallback_reason': lc_fallback_reason,
                                 'replan_required': int(plan_recomputed),
                             }
                         )
@@ -1135,6 +1147,9 @@ def run_experiment(
         merge_conflict_samples=ttc_merge_conflict_samples,
         step_length_s=step_length,
     )
+    contract_smoke_summary = build_contract_smoke_summary(
+        contract_by_id=contract_by_id,
+    )
     evidence_metrics = build_evidence_metrics(
         duration_s=duration_s,
         controlled_cav_steps=controlled_cav_steps,
@@ -1179,6 +1194,7 @@ def run_experiment(
     }
     metrics.update(ttc_metrics)
     metrics.update(evidence_metrics)
+    metrics['contract_smoke_summary'] = contract_smoke_summary
     metrics_path.write_text(json.dumps(metrics, indent=2), encoding='utf-8')
 
     config = {

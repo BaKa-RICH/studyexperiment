@@ -1,20 +1,17 @@
 {
-  "title": "experimental_reconstruction: Todo 1.1-2.2",
+  "title": "experimental_reconstruction: Todo 1.1-2.3",
   "created": "2026-03-12T00:00:00",
   "main_agent": "Opus",
   "reviewers": ["GPT", "Sonnet", "Gemini"],
   "messages": [
-    {"agent": "Opus", "type": "VOTE", "time": "2026-03-12 Step1-6", "content": "Todo 1.1: PASS. Todo 1.2: PASS(T1冻结). Todo 1.3: PASS(SSoT+复现性)."},
-    {"agent": "Opus", "type": "CONTEXT_SHARE", "time": "2026-03-12 Step4-1", "content": "Todo 1.4 3大不公平问题: 1)FIFO/DP给HDV发幽灵命令 2)speed_tracking被HDV污染 3)control_mode不一致"},
-    {"agent": "Opus", "type": "EXECUTION", "time": "2026-03-12 Step4-5", "content": "Todo 1.4实现完成。95项测试PASS, 零回归。Gate 1/2/3静态PASS, Q1 FAIR_BASELINE_ANCHOR已形成。"},
-    {"agent": "Opus", "type": "CONTEXT_SHARE", "time": "2026-03-12 Step5-1", "content": "Todo 2.1 调查发现4大问题: anchor语义混淆, contract缺stream, 无eligible rate, 坐标系不一致"},
-    {"agent": "Opus", "type": "VOTE", "time": "2026-03-12 Step5-4", "content": "VOTE(7项): stream双加, 三分逻辑消除生存者偏差(Gemini), FEEDBACK加anchor_event_type, resolve_anchor_event_type加ValueError, eligible快照, 冻结语义docstring, per-episode追踪"},
-    {"agent": "Opus", "type": "EXECUTION", "time": "2026-03-12 Step5-5", "content": "Todo 2.1实现完成。106项测试PASS(含11项新增), 零回归。Sonnet 7/7 + Gemini 5/5 VERIFIED。Gate 1/2/3全PASS。"},
-    {"agent": "Opus", "type": "CONTEXT_SHARE", "time": "2026-03-12 Step6-1", "content": "Todo 2.2 调查: merge_policy只影响contract层不影响实际控制。hierarchical+fixed时contract说expected_pos=0.0但Zone C仍做gap-based换道—语义不一致。"},
-    {"agent": "Opus", "type": "PROPOSAL", "time": "2026-03-12 Step6-2", "content": "原方案: fixed时跳过Zone C(zone_c_actions={})"},
-    {"agent": "GPT", "type": "REVIEW", "time": "2026-03-12 Step6-3", "content": "FIX-1 FLAG(补merge_policy校验). FIX-2 FLAG(anchor_event变量顺序风险). FIX-3 APPROVE. Zone A保持. Todo2.1兼容."},
-    {"agent": "Sonnet", "type": "REVIEW", "time": "2026-03-12 Step6-3", "content": "FIX-1 FLAG(__post_init__条件创建MergePointManager). FIX-2 FLAG(**BUG**: L354 anchor_event在merge_policy定义前→UnboundLocalError). FIX-3 APPROVE."},
-    {"agent": "Gemini", "type": "REVIEW", "time": "2026-03-12 Step6-3", "content": "FIX-1 **REJECT**(致命: LC_MODE_PROHIBIT_ALL+跳过Zone C→ramp CAV物理卡死). 正确方案: Zone C不跳过,MergePointManager以fixed params(search_start=fallback_pos→立即fallback merge)."},
-    {"agent": "Opus", "type": "VOTE", "time": "2026-03-12 Step6-4", "content": "VOTE(7项,采纳Gemini REJECT): FIX-1改版—Zone C保留,fixed用MergePointParams(search_start=fallback_pos)→立即fallback; FIX-2 run.py传merge_policy; FIX-3修Sonnet BUG(anchor_event移到merge_policy后); FIX-4 lc_complete error只在flexible计入; FIX-5 merge_policy校验ValueError; FIX-6 command_builder不改; FIX-7测试"}
+    {"agent": "Opus", "type": "EXECUTION", "time": "Step4-5", "content": "Todo 1.4完成。95测试PASS。"},
+    {"agent": "Opus", "type": "EXECUTION", "time": "Step5-5", "content": "Todo 2.1完成。106测试PASS。"},
+    {"agent": "Opus", "type": "EXECUTION", "time": "Step6-5", "content": "Todo 2.2完成。114测试PASS。"},
+    {"agent": "Opus", "type": "CONTEXT_SHARE", "time": "Step7-1", "content": "Todo 2.3缺口: lc_complete缺predecessor/follower, fallback_reason只有zone_c_chain_incomplete, match_rate只查predecessor, cross_merge replan=0, merge_history缺lead/follow"},
+    {"agent": "Opus", "type": "PROPOSAL", "time": "Step7-2", "content": "6项: merge_history加lead/follow, lc_complete填充, fallback_reason, replan修正, match_rate加follower, 测试"},
+    {"agent": "GPT", "type": "REVIEW", "time": "Step7-3", "content": "FIX-1 FLAG(last_eval超时重试后可能stale). FIX-2 REJECT(merge_history可能缺失+语义不等价). FIX-3 FLAG(缓存is_fallback). FIX-4 FLAG(语义需明确). FIX-5 FLAG(空target跳过). FIX-6 APPROVE."},
+    {"agent": "Sonnet", "type": "REVIEW", "time": "Step7-3", "content": "FIX-1 FLAG(命名为gap_lead/follow区分). FIX-2 FLAG(缺失时fallback). FIX-3 APPROVE. FIX-4 FLAG(语义). FIX-5 APPROVE. **Q2 CONTRACT_SMOKE_SUMMARY REJECT**(阻断性缺陷,PROPOSAL未涉及)."},
+    {"agent": "Gemini", "type": "REVIEW", "time": "Step7-3", "content": "FIX-2 **REJECT**(L1 gap邻居≠通过序前车,同字段不同语义致概念坍塌). FIX-4 **REJECT**(全局replan假阳性). FIX-1 FLAG(SEARCHING到MERGED时间漂移). FIX-5 FLAG(空target跳过)."},
+    {"agent": "Opus", "type": "VOTE", "time": "Step7-4", "content": "VOTE(8项): FIX-1 merge_history加gap_lead_id+gap_follow_id; FIX-2改 lc_complete填gap邻居(match_rate仅用cross_merge不受影响); FIX-3 fallback_reason='position_fallback'; FIX-4 cross_merge replan_required=plan_recomputed(时序标志非因果); FIX-5 match_rate加follower(空target跳过); FIX-6 CONTRACT_SMOKE_SUMMARY(Sonnet REJECT); FIX-7 测试; 文档: 同一字段不同事件含义不同已在anchor语义文档中说明"}
   ]
 }
