@@ -48,11 +48,11 @@ class TestEvaluateMergePoint:
     def test_large_gap_feasible(self):
         """Wide gap on L1 → feasible with correct metrics.
 
-        Setup (same speed, v=20 m/s):
+        Setup (same speed, v=20 m/s, phi_s=1.5, s0=5):
           follow v_f at 30 m, lead v_l at 200 m, CAV at 100 m
-          G_f(t_lc) = (200 - 100 - 5) + 0 = 95  >= phi*v_l + s0 = 45 ✓
-          G_r(t_lc) = (100 -  30 - 5) + 0 = 65  >= phi*v_c + s0 = 45 ✓
-          safety_margin = min(95-45, 65-45) = 20
+          G_f(t_lc) = (200 - 100 - 5) + 0 = 95  >= phi*v_l + s0 = 35 ✓
+          G_r(t_lc) = (100 -  30 - 5) + 0 = 65  >= phi*v_c + s0 = 35 ✓
+          safety_margin = min(95-35, 65-35) = 30
         """
         lane1 = [('v_lead', 200.0, 20.0), ('v_follow', 30.0, 20.0)]
         result = evaluate_merge_point(
@@ -64,15 +64,14 @@ class TestEvaluateMergePoint:
         assert result.gap_rear_m == pytest.approx(65.0)
         assert result.lead_id == 'v_lead'
         assert result.follow_id == 'v_follow'
-        assert result.safety_margin == pytest.approx(20.0)
+        assert result.safety_margin == pytest.approx(30.0)
         assert result.is_fallback is False
 
     def test_small_gap_infeasible(self):
         """Gap smaller than D_f_min → infeasible (P2-2 numerical validation).
 
-        At v=25 m/s, D_f_min = L + s0 + phi*v_l = 5+5+2*25 = 60 m.
-        With lead at 190 m and CAV at 150 m, distance = 40 m < 60 m.
-          G_f(t_lc) = (190-150-5) + 0 = 35  < phi*25+5 = 55  → S1 FAIL
+        At v=25 m/s, phi_s=1.5:
+          G_f(t_lc) = (190-150-5) + 0 = 35  < phi*25+5 = 42.5  → S1 FAIL
         """
         lane1 = [('v_l', 190.0, 25.0), ('v_f', 70.0, 25.0)]
         result = evaluate_merge_point(
@@ -84,8 +83,9 @@ class TestEvaluateMergePoint:
     def test_no_front_vehicle(self):
         """Tail gap (no lead vehicle) → S1 auto-satisfied.
 
-        Only a follow vehicle behind CAV.
-          G_r(t_lc) = (100-30-5) + 0 = 65  >= 45  ✓
+        Only a follow vehicle behind CAV (phi_s=1.5, s0=5).
+          G_r(t_lc) = (100-30-5) + 0 = 65  >= phi*v_c+s0 = 35  ✓
+          margin_r = 65 - 35 = 30
         """
         lane1 = [('v_behind', 30.0, 20.0)]
         result = evaluate_merge_point(
@@ -96,13 +96,14 @@ class TestEvaluateMergePoint:
         assert result.follow_id == 'v_behind'
         assert result.gap_front_m is None
         assert result.gap_rear_m == pytest.approx(65.0)
-        assert result.safety_margin == pytest.approx(65.0 - 45.0)
+        assert result.safety_margin == pytest.approx(30.0)
 
     def test_no_rear_vehicle(self):
         """Head gap (no follow vehicle) → S2 auto-satisfied.
 
-        Only a lead vehicle ahead of CAV.
-          G_f(t_lc) = (200-100-5) + 0 = 95  >= 45  ✓
+        Only a lead vehicle ahead of CAV (phi_s=1.5, s0=5).
+          G_f(t_lc) = (200-100-5) + 0 = 95  >= phi*v_l+s0 = 35  ✓
+          margin_f = 95 - 35 = 60
         """
         lane1 = [('v_ahead', 200.0, 20.0)]
         result = evaluate_merge_point(
@@ -113,7 +114,7 @@ class TestEvaluateMergePoint:
         assert result.follow_id is None
         assert result.gap_front_m == pytest.approx(95.0)
         assert result.gap_rear_m is None
-        assert result.safety_margin == pytest.approx(95.0 - 45.0)
+        assert result.safety_margin == pytest.approx(60.0)
 
     def test_fallback_trigger(self):
         """CAV at/past fallback position → forced feasible with is_fallback."""
@@ -130,8 +131,9 @@ class TestEvaluateMergePoint:
     def test_speed_mismatch_front(self):
         """CAV faster than lead → closing gap makes S1 fail.
 
-        v_c=30, v_l=15.  G_f(t_lc) = (165-100-5) + (15-30)*3 = 60-45 = 15
-        threshold_f = 2*15+5 = 35.  15 < 35 → FAIL
+        v_c=30, v_l=15, phi_s=1.5.
+          G_f(t_lc) = (165-100-5) + (15-30)*3 = 60-45 = 15
+          threshold_f = 1.5*15+5 = 27.5.  15 < 27.5 → FAIL
         """
         lane1 = [('slow_lead', 165.0, 15.0)]
         result = evaluate_merge_point(
@@ -142,8 +144,9 @@ class TestEvaluateMergePoint:
     def test_speed_mismatch_rear(self):
         """Follow faster than CAV → rear gap closes, S2 fails.
 
-        v_c=15, v_f=30.  G_r(t_lc) = (100-40-5) + (15-30)*3 = 55-45 = 10
-        threshold_r = 2*15+5 = 35.  10 < 35 → FAIL
+        v_c=15, v_f=30, phi_s=1.5.
+          G_r(t_lc) = (100-40-5) + (15-30)*3 = 55-45 = 10
+          threshold_r = 1.5*15+5 = 27.5.  10 < 27.5 → FAIL
         """
         lane1 = [('fast_follow', 40.0, 30.0)]
         result = evaluate_merge_point(
@@ -155,10 +158,11 @@ class TestEvaluateMergePoint:
         """Multiple vehicles on L1: algorithm picks the first feasible gap.
 
         Vehicles (sorted): v_a(30), v_b(85), v_c(280).
-        CAV at 150.  insert_idx = 2 → current gap: follow=v_b, lead=v_c.
-          G_f = (280-150-5)+0 = 125 >= 45 ✓
-          G_r = (150-85-5)+0  =  60 >= 45 ✓  → FEASIBLE (earliest)
-        Tail gap not checked because first gap already feasible.
+        CAV at 150 (phi_s=1.5, s0=5).
+        insert_idx = 2 → current gap: follow=v_b, lead=v_c.
+          G_f = (280-150-5)+0 = 125 >= 35 ✓
+          G_r = (150-85-5)+0  =  60 >= 35 ✓  → FEASIBLE (earliest)
+          margin = min(125-35, 60-35) = 25
         """
         lane1 = [('v_a', 30.0, 20.0), ('v_b', 85.0, 20.0), ('v_c', 280.0, 20.0)]
         result = evaluate_merge_point(
@@ -169,7 +173,7 @@ class TestEvaluateMergePoint:
         assert result.follow_id == 'v_b'
         assert result.gap_front_m == pytest.approx(125.0)
         assert result.gap_rear_m == pytest.approx(60.0)
-        assert result.safety_margin == pytest.approx(min(125.0 - 45.0, 60.0 - 45.0))
+        assert result.safety_margin == pytest.approx(25.0)
 
     def test_fallback_exact_boundary(self):
         """CAV exactly at fallback position → triggers fallback."""
@@ -184,9 +188,9 @@ class TestEvaluateMergePoint:
     def test_all_vehicles_ahead_tight(self):
         """All L1 vehicles ahead of CAV, head gap is the only forward option.
 
-        v1 at 160, v2 at 250.  CAV at 100, insert_idx=0.
+        v1 at 160, v2 at 250.  CAV at 100, insert_idx=0 (phi_s=1.5, s0=5).
         Head gap: follow=None, lead=v1(160).
-          G_f = (160-100-5)+0 = 55  >= 45 ✓  (margin=10)
+          G_f = (160-100-5)+0 = 55  >= 35 ✓  (margin=20)
           G_r = inf                          ✓
         """
         lane1 = [('v1', 160.0, 20.0), ('v2', 250.0, 20.0)]
@@ -196,7 +200,7 @@ class TestEvaluateMergePoint:
         assert result.feasible is True
         assert result.lead_id == 'v1'
         assert result.follow_id is None
-        assert result.safety_margin == pytest.approx(10.0)
+        assert result.safety_margin == pytest.approx(20.0)
 
     def test_zero_speed_cav(self):
         """Stationary CAV (v_c=0): merge_position equals current position.
