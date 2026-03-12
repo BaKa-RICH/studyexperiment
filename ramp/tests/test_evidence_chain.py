@@ -7,7 +7,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+import pytest
+
 from ramp.experiments.evidence_chain import (
+    ANCHOR_EVENT_CROSS_MERGE,
+    ANCHOR_EVENT_CROSS_MERGE_FALLBACK,
+    ANCHOR_EVENT_LC_COMPLETE,
+    CONTRACT_FIELDS,
+    FEEDBACK_FIELDS,
     MERGE_POLICY_FIXED,
     MERGE_POLICY_FLEXIBLE,
     attach_actual_neighbors,
@@ -15,6 +22,7 @@ from ramp.experiments.evidence_chain import (
     build_evidence_metrics,
     expected_merge_position_m,
     merge_window_half_span_s,
+    resolve_anchor_event_type,
     resolve_merge_policy,
 )
 
@@ -140,3 +148,149 @@ def test_merge_window_half_span_s() -> None:
         delta_1_s=1.5,
         delta_2_s=2.0,
     ) == 2.0
+
+
+def test_resolve_anchor_event_type_fixed() -> None:
+    assert resolve_anchor_event_type(merge_policy=MERGE_POLICY_FIXED) == ANCHOR_EVENT_CROSS_MERGE
+
+
+def test_resolve_anchor_event_type_flexible() -> None:
+    assert resolve_anchor_event_type(merge_policy=MERGE_POLICY_FLEXIBLE) == ANCHOR_EVENT_LC_COMPLETE
+
+
+def test_resolve_anchor_event_type_unknown_raises() -> None:
+    with pytest.raises(ValueError, match='Unknown merge_policy'):
+        resolve_anchor_event_type(merge_policy='nonexistent')
+
+
+def test_contract_fields_include_stream() -> None:
+    assert 'stream' in CONTRACT_FIELDS
+    assert 'vehicle_type' in CONTRACT_FIELDS
+
+
+def test_feedback_fields_include_stream_and_anchor() -> None:
+    assert 'stream' in FEEDBACK_FIELDS
+    assert 'anchor_event_type' in FEEDBACK_FIELDS
+
+
+def test_build_contract_row_includes_stream() -> None:
+    _, row, _ = build_contract_row(
+        contract_index=1,
+        sim_time=5.0,
+        zoneb_algorithm='fifo',
+        merge_policy=MERGE_POLICY_FIXED,
+        veh_id='veh_1',
+        stream='ramp',
+        sequence_rank=1,
+        target_predecessor_id='',
+        target_follower_id='veh_2',
+        target_cross_time=15.0,
+        merge_window_half_span_s=1.5,
+        expected_merge_position_m_value=0.0,
+        desired_merge_speed_mps=10.0,
+    )
+    assert row['stream'] == 'ramp'
+
+
+def test_build_contract_row_stream_defaults_to_unknown() -> None:
+    _, row, _ = build_contract_row(
+        contract_index=1,
+        sim_time=5.0,
+        zoneb_algorithm='dp',
+        merge_policy=MERGE_POLICY_FLEXIBLE,
+        veh_id='veh_x',
+        sequence_rank=1,
+        target_predecessor_id='',
+        target_follower_id='',
+        target_cross_time=15.0,
+        merge_window_half_span_s=2.0,
+        expected_merge_position_m_value=20.0,
+        desired_merge_speed_mps=8.0,
+    )
+    assert row['stream'] == 'unknown'
+
+
+def test_contract_schema_same_for_fixed_and_flexible() -> None:
+    _, row_fixed, _ = build_contract_row(
+        contract_index=1,
+        sim_time=5.0,
+        zoneb_algorithm='fifo',
+        merge_policy=MERGE_POLICY_FIXED,
+        veh_id='veh_1',
+        stream='ramp',
+        sequence_rank=1,
+        target_predecessor_id='',
+        target_follower_id='',
+        target_cross_time=15.0,
+        merge_window_half_span_s=1.5,
+        expected_merge_position_m_value=0.0,
+        desired_merge_speed_mps=10.0,
+    )
+    _, row_flex, _ = build_contract_row(
+        contract_index=2,
+        sim_time=5.0,
+        zoneb_algorithm='hierarchical',
+        merge_policy=MERGE_POLICY_FLEXIBLE,
+        veh_id='veh_2',
+        stream='ramp',
+        sequence_rank=1,
+        target_predecessor_id='',
+        target_follower_id='',
+        target_cross_time=15.0,
+        merge_window_half_span_s=2.0,
+        expected_merge_position_m_value=20.0,
+        desired_merge_speed_mps=8.0,
+    )
+    assert set(row_fixed.keys()) == set(row_flex.keys())
+    assert isinstance(row_fixed['expected_merge_position_m'], float)
+    assert isinstance(row_flex['expected_merge_position_m'], float)
+
+
+def test_eligible_ramp_cav_contract_rate() -> None:
+    metrics = build_evidence_metrics(
+        duration_s=120.0,
+        controlled_cav_steps=10,
+        covered_control_cav_steps=10,
+        autonomous_lane_change_detected_count=0,
+        speed_mismatch_detected_count=0,
+        zone_a_event_count=0,
+        zone_c_event_count=0,
+        zone_c_chain_status={},
+        zone_c_chain_complete_count=0,
+        contract_vehicle_ids={'ramp_cav_1', 'ramp_cav_2', 'main_cav_3'},
+        feedback_vehicle_ids={'ramp_cav_1'},
+        eligible_ramp_cav_ids={'ramp_cav_1', 'ramp_cav_2', 'ramp_cav_3'},
+        feedback_rows=[],
+        contract_by_id={},
+        planned_actual_time_errors=[],
+        planned_actual_position_errors=[],
+    )
+    assert abs(metrics['eligible_ramp_cav_contract_rate'] - 2.0 / 3.0) < 1e-9
+
+
+def test_eligible_ramp_cav_contract_rate_none() -> None:
+    metrics = build_evidence_metrics(
+        duration_s=120.0,
+        controlled_cav_steps=10,
+        covered_control_cav_steps=10,
+        autonomous_lane_change_detected_count=0,
+        speed_mismatch_detected_count=0,
+        zone_a_event_count=0,
+        zone_c_event_count=0,
+        zone_c_chain_status={},
+        zone_c_chain_complete_count=0,
+        contract_vehicle_ids={'a'},
+        feedback_vehicle_ids=set(),
+        eligible_ramp_cav_ids=None,
+        feedback_rows=[],
+        contract_by_id={},
+        planned_actual_time_errors=[],
+        planned_actual_position_errors=[],
+    )
+    assert metrics['eligible_ramp_cav_contract_rate'] == 0.0
+
+
+def test_anchor_event_constants() -> None:
+    assert ANCHOR_EVENT_CROSS_MERGE == 'cross_merge'
+    assert ANCHOR_EVENT_LC_COMPLETE == 'lc_complete'
+    assert ANCHOR_EVENT_CROSS_MERGE_FALLBACK == 'cross_merge_fallback'

@@ -1,3 +1,21 @@
+"""Evidence-chain schema for ramp-merge experiments.
+
+Anchor semantics (frozen by Todo 2.1)
+--------------------------------------
+``expected_merge_position_m`` = remaining distance (m) to *merge_edge* at the
+planned merge moment.
+
+* **fixed** policy: the merge action is crossing the merge_edge itself,
+  so ``expected = 0.0``.  Authoritative feedback event: ``cross_merge``.
+* **flexible** policy: the merge action is the L0→L1 lane change,
+  which happens *before* the merge_edge, so
+  ``expected = FLEXIBLE_POSITION_OFFSET_M``.
+  Authoritative feedback event: ``lc_complete``.
+
+For flexible, a ``cross_merge`` feedback is still recorded for lifecycle
+tracking, but its position error is only calculated when no prior
+``lc_complete`` was observed (indicating a fallback / prediction failure).
+"""
 from __future__ import annotations
 
 from collections import Counter
@@ -7,6 +25,10 @@ MERGE_POLICY_FLEXIBLE = 'flexible'
 FALLBACK_POLICY_KEEP_LANE = 'keep_lane_then_release'
 SPEED_MISMATCH_THRESHOLD_MPS = 2.0
 FLEXIBLE_POSITION_OFFSET_M = 20.0
+
+ANCHOR_EVENT_CROSS_MERGE = 'cross_merge'
+ANCHOR_EVENT_LC_COMPLETE = 'lc_complete'
+ANCHOR_EVENT_CROSS_MERGE_FALLBACK = 'cross_merge_fallback'
 
 CONTROL_FIELDS = [
     'time',
@@ -30,6 +52,7 @@ CONTRACT_FIELDS = [
     'merge_policy',
     'ego_vehicle_id',
     'vehicle_type',
+    'stream',
     'sequence_rank',
     'target_predecessor_id',
     'target_follower_id',
@@ -47,6 +70,8 @@ FEEDBACK_FIELDS = [
     'event_id',
     'contract_id',
     'ego_vehicle_id',
+    'stream',
+    'anchor_event_type',
     'execution_state',
     'gap_found',
     'gap_reject_reason',
@@ -83,6 +108,19 @@ def resolve_merge_policy(*, policy: str, policy_variant: str) -> str:
     if policy == 'hierarchical':
         return MERGE_POLICY_FLEXIBLE
     return MERGE_POLICY_FIXED
+
+
+def resolve_anchor_event_type(*, merge_policy: str) -> str:
+    """Return the authoritative feedback event type for a given merge policy.
+
+    * fixed  → cross_merge  (merge action = reaching the merge edge)
+    * flexible → lc_complete (merge action = L0→L1 lane change)
+    """
+    if merge_policy == MERGE_POLICY_FIXED:
+        return ANCHOR_EVENT_CROSS_MERGE
+    if merge_policy == MERGE_POLICY_FLEXIBLE:
+        return ANCHOR_EVENT_LC_COMPLETE
+    raise ValueError(f'Unknown merge_policy: {merge_policy!r}')
 
 
 def merge_window_half_span_s(
@@ -122,6 +160,7 @@ def build_contract_row(
     merge_policy: str,
     veh_id: str,
     vehicle_type: str = '',
+    stream: str = 'unknown',
     sequence_rank: int,
     target_predecessor_id: str,
     target_follower_id: str,
@@ -140,6 +179,7 @@ def build_contract_row(
         'merge_policy': merge_policy,
         'ego_vehicle_id': veh_id,
         'vehicle_type': vehicle_type,
+        'stream': stream,
         'sequence_rank': sequence_rank,
         'target_predecessor_id': target_predecessor_id,
         'target_follower_id': target_follower_id,
@@ -194,6 +234,7 @@ def build_evidence_metrics(
     zone_c_chain_complete_count: int,
     contract_vehicle_ids: set[str],
     feedback_vehicle_ids: set[str],
+    eligible_ramp_cav_ids: set[str] | None = None,
     feedback_rows: list[dict[str, str | float | int]],
     contract_by_id: dict[str, dict[str, float | str]],
     planned_actual_time_errors: list[float],
@@ -218,6 +259,11 @@ def build_evidence_metrics(
     contract_realization_rate = (
         len(feedback_vehicle_ids) / len(contract_vehicle_ids) if contract_vehicle_ids else 0.0
     )
+    if eligible_ramp_cav_ids is not None and eligible_ramp_cav_ids:
+        eligible_with_contract = eligible_ramp_cav_ids & contract_vehicle_ids
+        eligible_ramp_cav_contract_rate = len(eligible_with_contract) / len(eligible_ramp_cav_ids)
+    else:
+        eligible_ramp_cav_contract_rate = 0.0
 
     merge_window_hit_count = 0
     merge_window_checked_count = 0
@@ -276,6 +322,7 @@ def build_evidence_metrics(
         'zone_c_action_chain_complete_rate': zone_c_action_chain_complete_rate,
         'autonomous_merge_leakage_rate': autonomous_merge_leakage_rate,
         'contract_realization_rate': contract_realization_rate,
+        'eligible_ramp_cav_contract_rate': eligible_ramp_cav_contract_rate,
         'merge_window_hit_rate': merge_window_hit_rate,
         'predecessor_follower_match_rate': predecessor_follower_match_rate,
         'planned_actual_time_error_p50_s': percentile(planned_actual_time_errors, 0.50),

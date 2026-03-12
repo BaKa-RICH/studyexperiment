@@ -18,9 +18,13 @@ from ramp.policies.hierarchical.state_collector_ext import HierarchicalStateColl
 from ramp.policies.no_control.command_builder import build_command as build_no_control_command
 from ramp.policies.no_control.scheduler import compute_plan as compute_no_control_plan
 from ramp.experiments.evidence_chain import (
+    ANCHOR_EVENT_CROSS_MERGE,
+    ANCHOR_EVENT_CROSS_MERGE_FALLBACK,
+    ANCHOR_EVENT_LC_COMPLETE,
     CONTRACT_FIELDS,
     CONTROL_FIELDS,
     FEEDBACK_FIELDS,
+    MERGE_POLICY_FLEXIBLE,
     SPEED_MISMATCH_THRESHOLD_MPS,
     attach_actual_neighbors,
     build_contract_row,
@@ -28,6 +32,7 @@ from ramp.experiments.evidence_chain import (
     expected_merge_position_m,
     merge_window_half_span_s,
     percentile as _percentile,
+    resolve_anchor_event_type,
     resolve_merge_policy,
 )
 from ramp.runtime.controller import Controller
@@ -344,6 +349,9 @@ def run_experiment(
     zone_c_chain_status: dict[str, bool] = {}
     contract_vehicle_ids: set[str] = set()
     feedback_vehicle_ids: set[str] = set()
+    eligible_ramp_cav_ids: set[str] = set()
+    lc_complete_vehicle_ids: set[str] = set()
+    anchor_event = resolve_anchor_event_type(merge_policy=merge_policy)
     latest_contract_by_vehicle: dict[str, str] = {}
     contract_by_id: dict[str, dict[str, float | str]] = {}
     feedback_rows: list[dict[str, str | float | int]] = []
@@ -478,6 +486,13 @@ def run_experiment(
 
                 for veh_id in sorted(entered_this_step):
                     stream = str(state_collector.entry_info.get(veh_id, {}).get('stream', 'unknown'))
+                    if stream == 'ramp' and hier_vehicle_types.get(veh_id, '') != VEH_TYPE_HDV:
+                        vtype = hier_vehicle_types.get(veh_id, '')
+                        if vtype == '' and veh_id in active_vehicle_ids:
+                            vtype = traci.vehicle.getTypeID(veh_id)
+                            hier_vehicle_types[veh_id] = vtype
+                        if vtype != VEH_TYPE_HDV:
+                            eligible_ramp_cav_ids.add(veh_id)
                     event_writer.writerow(
                         {
                             'time': sim_time,
@@ -487,6 +502,7 @@ def run_experiment(
                         }
                     )
                 for veh_id in sorted(crossed_this_step):
+                    veh_stream = str(state_collector.entry_info.get(veh_id, {}).get('stream', 'unknown'))
                     event_writer.writerow(
                         {
                             'time': sim_time,
@@ -511,7 +527,14 @@ def run_experiment(
                     )
                     planned_actual_time_error_s: float | str = ''
                     planned_actual_position_error_m: float | str = ''
-                    if contract_id:
+                    if merge_policy == MERGE_POLICY_FLEXIBLE and veh_id in lc_complete_vehicle_ids:
+                        cross_anchor_type = ANCHOR_EVENT_CROSS_MERGE
+                    elif merge_policy == MERGE_POLICY_FLEXIBLE:
+                        cross_anchor_type = ANCHOR_EVENT_CROSS_MERGE_FALLBACK
+                    else:
+                        cross_anchor_type = ANCHOR_EVENT_CROSS_MERGE
+                    is_authoritative = cross_anchor_type != ANCHOR_EVENT_CROSS_MERGE or merge_policy != MERGE_POLICY_FLEXIBLE
+                    if contract_id and is_authoritative:
                         planned_actual_time_error_s = sim_time - expected_merge_time_s
                         planned_actual_position_error_m = (
                             actual_merge_position_m - expected_merge_position_value
@@ -520,6 +543,11 @@ def run_experiment(
                         planned_actual_time_errors.append(abs(planned_actual_time_error_s))
                         planned_actual_position_errors.append(
                             abs(planned_actual_position_error_m)
+                        )
+                    elif contract_id:
+                        planned_actual_time_error_s = sim_time - expected_merge_time_s
+                        planned_actual_position_error_m = (
+                            actual_merge_position_m - expected_merge_position_value
                         )
                     fallback_reason = ''
                     if veh_id in zone_c_chain_status and not zone_c_chain_status[veh_id]:
@@ -532,6 +560,8 @@ def run_experiment(
                             'event_id': f'feedback_{feedback_event_index:08d}',
                             'contract_id': contract_id,
                             'ego_vehicle_id': veh_id,
+                            'stream': veh_stream,
+                            'anchor_event_type': cross_anchor_type,
                             'execution_state': 'merge_cross',
                             'gap_found': '',
                             'gap_reject_reason': '',
@@ -659,6 +689,7 @@ def run_experiment(
                     for veh_id in sorted(zone_c_action_ids):
                         if veh_id not in zone_c_chain_status:
                             zone_c_chain_status[veh_id] = False
+                        zc_stream = str(state_collector.entry_info.get(veh_id, {}).get('stream', 'unknown'))
                         feedback_event_index += 1
                         feedback_rows.append(
                             {
@@ -666,6 +697,8 @@ def run_experiment(
                                 'event_id': f'feedback_{feedback_event_index:08d}',
                                 'contract_id': latest_contract_by_vehicle.get(veh_id, ''),
                                 'ego_vehicle_id': veh_id,
+                                'stream': zc_stream,
+                                'anchor_event_type': '',
                                 'execution_state': 'lc_command_issued',
                                 'gap_found': 1,
                                 'gap_reject_reason': '',
@@ -728,6 +761,7 @@ def run_experiment(
                                 merge_policy=merge_policy,
                                 veh_id=veh_id,
                                 vehicle_type=hier_vehicle_types.get(veh_id, ''),
+                                stream=stream,
                                 sequence_rank=order_index,
                                 target_predecessor_id=target_predecessor_id,
                                 target_follower_id=target_follower_id,
@@ -889,6 +923,8 @@ def run_experiment(
                     ):
                         zone_c_chain_status[veh_id] = True
                         zone_c_chain_complete_count += 1
+                        lc_complete_vehicle_ids.add(veh_id)
+                        lc_stream = str(state_collector.entry_info.get(veh_id, {}).get('stream', 'unknown'))
                         contract_id = latest_contract_by_vehicle.get(veh_id, '')
                         contract_snapshot = contract_by_id.get(contract_id, {})
                         actual_merge_position_m = float(control_zone_state[veh_id].get('d_to_merge', 0.0))
@@ -919,6 +955,8 @@ def run_experiment(
                                 'event_id': f'feedback_{feedback_event_index:08d}',
                                 'contract_id': contract_id,
                                 'ego_vehicle_id': veh_id,
+                                'stream': lc_stream,
+                                'anchor_event_type': ANCHOR_EVENT_LC_COMPLETE,
                                 'execution_state': 'lc_complete',
                                 'gap_found': 1,
                                 'gap_reject_reason': '',
@@ -1106,6 +1144,7 @@ def run_experiment(
         zone_c_chain_complete_count=zone_c_chain_complete_count,
         contract_vehicle_ids=contract_vehicle_ids,
         feedback_vehicle_ids=feedback_vehicle_ids,
+        eligible_ramp_cav_ids=eligible_ramp_cav_ids,
         feedback_rows=feedback_rows,
         contract_by_id=contract_by_id,
         planned_actual_time_errors=planned_actual_time_errors,
