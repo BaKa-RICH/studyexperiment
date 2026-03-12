@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ramp.common.vehicle_defs import is_hdv
 from .dp import ScheduleResult
 
 _FEASIBILITY_TOL = 1e-9
@@ -66,7 +67,7 @@ def dp_mixed_schedule(
 
                 veh_id = seq[idx]
                 vtype = veh_type_by_id.get(veh_id)
-                if vtype not in ('cav', 'hdv'):
+                if vtype != 'cav' and not is_hdv(vtype or ''):
                     raise ValueError(
                         f'Unknown or missing vehicle type for {veh_id}: {vtype}'
                     )
@@ -78,9 +79,9 @@ def dp_mixed_schedule(
                 prev_is_hdv = False
                 if last_lane != -1:
                     if last_lane == 0 and m > 0:
-                        prev_is_hdv = veh_type_by_id.get(main_seq[m - 1]) == 'hdv'
+                        prev_is_hdv = is_hdv(veh_type_by_id.get(main_seq[m - 1]) or '')
                     elif last_lane == 1 and n > 0:
-                        prev_is_hdv = veh_type_by_id.get(ramp_seq[n - 1]) == 'hdv'
+                        prev_is_hdv = is_hdv(veh_type_by_id.get(ramp_seq[n - 1]) or '')
 
                 if vtype == 'cav':
                     if veh_id not in t_min_cav_s:

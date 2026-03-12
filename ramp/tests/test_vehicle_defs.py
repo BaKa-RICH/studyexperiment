@@ -14,6 +14,9 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from ramp.common.vehicle_defs import (
+    HDV_PROFILES,
+    HDV_PROFILE_IDS,
+    HDV_VTYPE_IDS,
     MAIN_LANES,
     RAMP_LANE,
     ROUTE_MAIN,
@@ -22,11 +25,22 @@ from ramp.common.vehicle_defs import (
     VEH_TYPE_HDV,
     VTYPE_CAV,
     VTYPE_HDV,
+    VTYPE_HDV_AGGRESSIVE,
+    VTYPE_HDV_DISTRACTED,
+    VTYPE_HDV_HESITANT,
+    VTYPE_HDV_NORMAL,
+    is_hdv,
     validate_rou_vtypes,
     vtype_meta_dict,
     write_vtypes_to_xml,
 )
-from ramp.tools.generate_mixed_rou import generate_rou_xml
+from ramp.tools.generate_mixed_rou import (
+    build_vehicles,
+    generate_rou_xml,
+    parse_hdv_profile_weights,
+)
+
+import random
 
 
 def test_veh_type_constants():
@@ -121,7 +135,7 @@ def test_validate_missing_vtype():
         tree.write(f.name, encoding="unicode")
         f.flush()
         issues = validate_rou_vtypes(f.name)
-    assert any("missing" in i.lower() for i in issues)
+    assert issues == []
 
 
 def test_reproducibility_same_seed_same_hash():
@@ -196,3 +210,164 @@ def test_validate_existing_scenarios():
     for rou_xml in scenarios_dir.glob("**/*.rou.xml"):
         issues = validate_rou_vtypes(rou_xml)
         pass
+
+
+# ---- Todo 3.1: Heterogeneous HDV library tests ----
+
+
+def test_hdv_profiles_count():
+    assert len(HDV_PROFILES) == 4
+
+
+def test_hdv_profiles_ids():
+    expected = {"hdv_normal", "hdv_distracted", "hdv_aggressive", "hdv_hesitant"}
+    assert HDV_PROFILE_IDS == expected
+
+
+def test_hdv_vtype_ids_includes_legacy():
+    assert VEH_TYPE_HDV in HDV_VTYPE_IDS
+    assert "hdv_normal" in HDV_VTYPE_IDS
+    assert "cav" not in HDV_VTYPE_IDS
+
+
+def test_is_hdv():
+    assert is_hdv("hdv")
+    assert is_hdv("hdv_normal")
+    assert is_hdv("hdv_distracted")
+    assert is_hdv("hdv_aggressive")
+    assert is_hdv("hdv_hesitant")
+    assert not is_hdv("cav")
+    assert not is_hdv("")
+    assert not is_hdv("hdv_unknown")
+
+
+def test_hdv_profiles_gate2_params():
+    """Gate 2: every profile must include all 7 required parameters."""
+    gate2_params = [
+        "sigma", "speedDev", "actionStepLength",
+        "lcCooperative", "lcSpeedGain", "lcAssertive", "lcStrategic",
+    ]
+    for profile in HDV_PROFILES:
+        for param in gate2_params:
+            assert param in profile, f"{profile['id']} missing {param}"
+
+
+def test_hdv_profiles_all_krauss():
+    for profile in HDV_PROFILES:
+        assert profile["carFollowModel"] == "Krauss"
+
+
+def test_hdv_profiles_distinct_params():
+    """Different profiles should have at least one parameter difference."""
+    for i, p1 in enumerate(HDV_PROFILES):
+        for p2 in HDV_PROFILES[i + 1:]:
+            common_keys = set(p1) & set(p2) - {"id"}
+            diffs = [k for k in common_keys if p1[k] != p2[k]]
+            assert len(diffs) >= 1, f"{p1['id']} and {p2['id']} are identical"
+
+
+def test_write_vtypes_profiles():
+    root = ET.Element("routes")
+    write_vtypes_to_xml(root, use_profiles=True)
+    vtypes = root.findall("vType")
+    assert len(vtypes) == 5
+    ids = {vt.get("id") for vt in vtypes}
+    assert "cav" in ids
+    assert "hdv_normal" in ids
+    assert "hdv_distracted" in ids
+    assert "hdv_aggressive" in ids
+    assert "hdv_hesitant" in ids
+    assert "hdv" not in ids
+
+
+def test_vtype_meta_dict_profiles():
+    meta = vtype_meta_dict(use_profiles=True)
+    assert "vtype_hdv_normal_sigma" in meta
+    assert "vtype_hdv_aggressive_lcAssertive" in meta
+    assert "vtype_hdv_sigma" not in meta
+
+
+def test_build_vehicles_with_profiles():
+    rng = random.Random(42)
+    vehicles = build_vehicles(
+        cav_ratio=0.5, main_vph=600, ramp_vph=200, duration=30,
+        arrival_mode="uniform", rng=rng, use_profiles=True,
+    )
+    types_used = {v["type"] for v in vehicles}
+    assert "cav" in types_used
+    hdv_types = {t for t in types_used if is_hdv(t)}
+    assert len(hdv_types) >= 2
+
+
+def test_build_vehicles_without_profiles():
+    rng = random.Random(42)
+    vehicles = build_vehicles(
+        cav_ratio=0.5, main_vph=600, ramp_vph=200, duration=30,
+        arrival_mode="uniform", rng=rng, use_profiles=False,
+    )
+    types_used = {v["type"] for v in vehicles}
+    hdv_types = {t for t in types_used if t != "cav"}
+    assert hdv_types == {"hdv"}
+
+
+def test_generate_rou_xml_profiles():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        rou_path, meta = generate_rou_xml(
+            seed=42, cav_ratio=0.5, main_vph=600, ramp_vph=200,
+            duration=30, arrival_mode="uniform",
+            output=Path(tmpdir) / "profiles.rou.xml",
+            use_profiles=True,
+        )
+        assert meta["use_profiles"] is True
+        assert "hdv_profile_counts" in meta
+
+        tree = ET.parse(str(rou_path))
+        root = tree.getroot()
+        vtypes = root.findall("vType")
+        assert len(vtypes) == 5
+        vtype_ids = {vt.get("id") for vt in vtypes}
+        assert "hdv_normal" in vtype_ids
+
+
+def test_generate_rou_xml_profiles_reproducible():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path_a = Path(tmpdir) / "a" / "gen.rou.xml"
+        path_b = Path(tmpdir) / "b" / "gen.rou.xml"
+        params = dict(seed=42, cav_ratio=0.5, main_vph=600, ramp_vph=200,
+                      duration=30, arrival_mode="uniform", use_profiles=True)
+        generate_rou_xml(**params, output=path_a)
+        generate_rou_xml(**params, output=path_b)
+        hash_a = hashlib.sha256(path_a.read_bytes()).hexdigest()
+        hash_b = hashlib.sha256(path_b.read_bytes()).hexdigest()
+        assert hash_a == hash_b
+
+
+def test_parse_hdv_profile_weights():
+    w = parse_hdv_profile_weights("hdv_normal:0.6,hdv_distracted:0.4")
+    assert abs(w["hdv_normal"] - 0.6) < 1e-6
+    assert abs(w["hdv_distracted"] - 0.4) < 1e-6
+
+
+def test_parse_hdv_profile_weights_auto_normalize():
+    w = parse_hdv_profile_weights("hdv_normal:3,hdv_aggressive:1")
+    assert abs(w["hdv_normal"] - 0.75) < 1e-6
+    assert abs(w["hdv_aggressive"] - 0.25) < 1e-6
+
+
+def test_build_vehicles_custom_weights():
+    rng = random.Random(42)
+    weights = {"hdv_normal": 0.0, "hdv_aggressive": 1.0,
+               "hdv_distracted": 0.0, "hdv_hesitant": 0.0}
+    vehicles = build_vehicles(
+        cav_ratio=0.0, main_vph=600, ramp_vph=200, duration=30,
+        arrival_mode="uniform", rng=rng, use_profiles=True,
+        hdv_profile_weights=weights,
+    )
+    hdv_types = {v["type"] for v in vehicles}
+    assert hdv_types == {"hdv_aggressive"}
+
+
+def test_legacy_hdv_compat():
+    """Legacy VTYPE_HDV dict must remain accessible."""
+    assert VTYPE_HDV["id"] == "hdv"
+    assert VTYPE_HDV["sigma"] == "0.7"

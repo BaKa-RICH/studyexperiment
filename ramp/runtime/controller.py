@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ramp.common.vehicle_defs import VEH_TYPE_HDV
+from ramp.common.vehicle_defs import VEH_TYPE_HDV, is_hdv
 from ramp.runtime.takeover import (
     TakeoverConfig,
     TakeoverMode,
@@ -48,7 +48,7 @@ class Controller:
     def _takeover(self, veh_id: str) -> bool:
         if veh_id in self.original_speed_mode_by_vehicle:
             return False
-        if self.traci.vehicle.getTypeID(veh_id) == VEH_TYPE_HDV:
+        if is_hdv(self.traci.vehicle.getTypeID(veh_id)):
             return False
         original = int(self.traci.vehicle.getSpeedMode(veh_id))
         self.original_speed_mode_by_vehicle[veh_id] = original
@@ -100,7 +100,7 @@ class Controller:
         for veh_id, speed_mps in command.set_speed_mps.items():
             if veh_id not in active_vehicle_ids:
                 continue
-            if self.traci.vehicle.getTypeID(veh_id) == VEH_TYPE_HDV:
+            if is_hdv(self.traci.vehicle.getTypeID(veh_id)):
                 continue
             if self._takeover(veh_id):
                 result.takeover_ids.add(veh_id)
@@ -141,7 +141,7 @@ class Controller:
         if cfg.prohibit_lc_all_cav_in_control_zone:
             for veh_id in control_zone_state:
                 vtype = (vehicle_types or {}).get(veh_id, '')
-                if vtype == VEH_TYPE_HDV:
+                if is_hdv(vtype):
                     continue
                 self.traci.vehicle.setLaneChangeMode(veh_id, LC_MODE_PROHIBIT_ALL)
             return
@@ -155,7 +155,7 @@ class Controller:
 
             if cfg.prohibit_lc_all_cav_on_merge_edge:
                 vtype = (vehicle_types or {}).get(veh_id, '')
-                if vtype != VEH_TYPE_HDV:
+                if not is_hdv(vtype):
                     self.traci.vehicle.setLaneChangeMode(veh_id, LC_MODE_PROHIBIT_ALL)
                 continue
 

@@ -5,6 +5,10 @@ Produces individual <vehicle> elements (not <flow>) with deterministic
 or Poisson arrivals. Each vehicle is randomly assigned as CAV or HDV
 based on the specified penetration ratio.
 
+When ``--use-profiles`` is enabled, HDV vehicles are further assigned
+to heterogeneous Krauss profiles (normal / distracted / aggressive /
+hesitant) according to ``--hdv-profile-weights``.
+
 All vType definitions are imported from ``ramp.common.vehicle_defs``
 (Single Source of Truth).  This module must never define its own vType
 parameters.
@@ -26,15 +30,59 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from ramp.common.vehicle_defs import (
+    HDV_PROFILES,
     MAIN_LANES,
     RAMP_LANE,
     ROUTE_MAIN,
     ROUTE_RAMP,
     VEH_TYPE_CAV,
     VEH_TYPE_HDV,
+    is_hdv,
     vtype_meta_dict,
     write_vtypes_to_xml,
 )
+
+DEFAULT_HDV_PROFILE_WEIGHTS: dict[str, float] = {
+    p["id"]: 1.0 for p in HDV_PROFILES
+}
+
+
+def parse_hdv_profile_weights(raw: str) -> dict[str, float]:
+    """Parse a comma-separated ``name:weight`` string into a dict.
+
+    Example: ``"hdv_normal:0.4,hdv_distracted:0.2,hdv_aggressive:0.2,hdv_hesitant:0.2"``
+    """
+    valid_ids = {p["id"] for p in HDV_PROFILES}
+    weights: dict[str, float] = {}
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if ":" not in token:
+            raise ValueError(f"Invalid weight token (expected name:weight): '{token}'")
+        name, w_str = token.split(":", 1)
+        name = name.strip()
+        if name not in valid_ids:
+            raise ValueError(
+                f"Unknown HDV profile '{name}'. Valid: {sorted(valid_ids)}"
+            )
+        weights[name] = float(w_str)
+    if not weights:
+        raise ValueError("No valid HDV profile weights provided")
+    total = sum(weights.values())
+    WEIGHT_TOL = 1e-6
+    if total <= 0:
+        raise ValueError(f"HDV profile weights must sum to > 0, got {total}")
+    if abs(total - 1.0) > WEIGHT_TOL:
+        weights = {k: v / total for k, v in weights.items()}
+    return weights
+
+
+def _pick_hdv_profile(rng: random.Random, weights: dict[str, float]) -> str:
+    """Return a random HDV profile ID based on *weights*."""
+    ids = list(weights.keys())
+    ws = [weights[k] for k in ids]
+    return rng.choices(ids, weights=ws, k=1)[0]
 
 
 def parse_args() -> argparse.Namespace:
@@ -70,6 +118,18 @@ def parse_args() -> argparse.Namespace:
         choices=["uniform", "poisson"],
         help="Vehicle arrival distribution (default uniform)"
     )
+    parser.add_argument(
+        "--use-profiles", action="store_true", default=False,
+        help="Use heterogeneous HDV profiles instead of single 'hdv' type"
+    )
+    parser.add_argument(
+        "--hdv-profile-weights", type=str, default=None,
+        help=(
+            "HDV profile weights as 'name:weight,...'. "
+            "Example: 'hdv_normal:0.4,hdv_distracted:0.2,hdv_aggressive:0.2,hdv_hesitant:0.2'. "
+            "Weights auto-normalize to sum=1. Implies --use-profiles."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -104,14 +164,22 @@ def build_vehicles(
     duration: int,
     arrival_mode: str,
     rng: random.Random,
+    use_profiles: bool = False,
+    hdv_profile_weights: dict[str, float] | None = None,
 ) -> list[dict[str, str]]:
     """Build all vehicle entries as a list of dicts sorted by depart time."""
     vehicles: list[dict[str, str]] = []
+    weights = hdv_profile_weights or DEFAULT_HDV_PROFILE_WEIGHTS
+
+    def _hdv_type() -> str:
+        if use_profiles:
+            return _pick_hdv_profile(rng, weights)
+        return VEH_TYPE_HDV
 
     for lane in MAIN_LANES:
         departures = generate_departures(main_vph, duration, rng, arrival_mode)
         for seq, depart in enumerate(departures):
-            vtype = VEH_TYPE_CAV if rng.random() < cav_ratio else VEH_TYPE_HDV
+            vtype = VEH_TYPE_CAV if rng.random() < cav_ratio else _hdv_type()
             vehicles.append({
                 "id": f"main_L{lane}_{seq}",
                 "type": vtype,
@@ -123,7 +191,7 @@ def build_vehicles(
 
     departures = generate_departures(ramp_vph, duration, rng, arrival_mode)
     for seq, depart in enumerate(departures):
-        vtype = VEH_TYPE_CAV if rng.random() < cav_ratio else VEH_TYPE_HDV
+        vtype = VEH_TYPE_CAV if rng.random() < cav_ratio else _hdv_type()
         vehicles.append({
             "id": f"ramp_R1_{seq}",
             "type": vtype,
@@ -137,11 +205,16 @@ def build_vehicles(
     return vehicles
 
 
-def write_rou_xml(vehicles: list[dict[str, str]], output_path: str | Path) -> None:
+def write_rou_xml(
+    vehicles: list[dict[str, str]],
+    output_path: str | Path,
+    *,
+    use_profiles: bool = False,
+) -> None:
     """Write the rou.xml file with vTypes, routes, and vehicles."""
     root = ET.Element("routes")
 
-    write_vtypes_to_xml(root)
+    write_vtypes_to_xml(root, use_profiles=use_profiles)
 
     main_route_elem = ET.SubElement(root, "route")
     for k, v in ROUTE_MAIN.items():
@@ -184,10 +257,12 @@ def write_meta(
     arrival_mode: str,
     vehicles: list[dict[str, str]],
     output_path: str | Path,
+    use_profiles: bool = False,
+    hdv_profile_weights: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Write rou_meta.json alongside the rou.xml.  Returns the meta dict."""
     cav_count = sum(1 for v in vehicles if v["type"] == VEH_TYPE_CAV)
-    hdv_count = sum(1 for v in vehicles if v["type"] == VEH_TYPE_HDV)
+    hdv_count = sum(1 for v in vehicles if is_hdv(v["type"]))
     total = len(vehicles)
 
     meta: dict[str, Any] = {
@@ -201,8 +276,19 @@ def write_meta(
         "actual_cav_count": cav_count,
         "actual_hdv_count": hdv_count,
         "actual_cav_ratio": round(cav_count / total, 4) if total > 0 else 0.0,
+        "use_profiles": use_profiles,
     }
-    meta.update(vtype_meta_dict())
+
+    if use_profiles:
+        profile_counts: dict[str, int] = {}
+        for v in vehicles:
+            vt = v["type"]
+            if is_hdv(vt):
+                profile_counts[vt] = profile_counts.get(vt, 0) + 1
+        meta["hdv_profile_counts"] = profile_counts
+        meta["hdv_profile_weights"] = hdv_profile_weights or DEFAULT_HDV_PROFILE_WEIGHTS
+
+    meta.update(vtype_meta_dict(use_profiles=use_profiles))
 
     output_path = Path(output_path)
     meta_path = output_path.parent / "rou_meta.json"
@@ -223,8 +309,14 @@ def print_summary(meta: dict[str, Any]) -> None:
     print(f"  Ramp R1 flow:    {meta['ramp_vph']} veh/h/lane")
     print(f"  Duration:        {meta['duration']}s")
     print(f"  Arrival mode:    {meta['arrival_mode']}")
-    print(f"  carFollowModel:  {meta.get('vtype_hdv_car_follow_model', 'Krauss')}")
-    print(f"  HDV sigma:       {meta.get('vtype_hdv_sigma', '?')}")
+    use_profiles = meta.get("use_profiles", False)
+    if use_profiles:
+        print(f"  HDV profiles:    ENABLED ({len(HDV_PROFILES)} profiles)")
+        for pid, cnt in sorted(meta.get("hdv_profile_counts", {}).items()):
+            print(f"    {pid}: {cnt}")
+    else:
+        print(f"  carFollowModel:  {meta.get('vtype_hdv_car_follow_model', 'Krauss')}")
+        print(f"  HDV sigma:       {meta.get('vtype_hdv_sigma', '?')}")
     print("-" * 50)
     print(f"  Total vehicles:  {meta['total_vehicles']}")
     print(f"  CAV count:       {meta['actual_cav_count']}")
@@ -252,6 +344,8 @@ def generate_rou_xml(
     duration: int = 300,
     arrival_mode: str = "uniform",
     output: str | Path = "mixed.rou.xml",
+    use_profiles: bool = False,
+    hdv_profile_weights: dict[str, float] | None = None,
 ) -> tuple[Path, dict[str, Any]]:
     """Programmatic API: generate rou.xml + rou_meta.json.
 
@@ -266,10 +360,12 @@ def generate_rou_xml(
         duration=duration,
         arrival_mode=arrival_mode,
         rng=rng,
+        use_profiles=use_profiles,
+        hdv_profile_weights=hdv_profile_weights,
     )
 
     rou_path = Path(output).resolve()
-    write_rou_xml(vehicles, rou_path)
+    write_rou_xml(vehicles, rou_path, use_profiles=use_profiles)
     validate_xml(rou_path)
 
     meta = write_meta(
@@ -281,6 +377,8 @@ def generate_rou_xml(
         arrival_mode=arrival_mode,
         vehicles=vehicles,
         output_path=rou_path,
+        use_profiles=use_profiles,
+        hdv_profile_weights=hdv_profile_weights,
     )
 
     print_summary(meta)
@@ -289,6 +387,11 @@ def generate_rou_xml(
 
 def main() -> None:
     args = parse_args()
+    use_profiles = args.use_profiles
+    hdv_profile_weights: dict[str, float] | None = None
+    if args.hdv_profile_weights:
+        use_profiles = True
+        hdv_profile_weights = parse_hdv_profile_weights(args.hdv_profile_weights)
     generate_rou_xml(
         seed=args.seed,
         cav_ratio=args.cav_ratio,
@@ -297,6 +400,8 @@ def main() -> None:
         duration=args.duration,
         arrival_mode=args.arrival_mode,
         output=args.output,
+        use_profiles=use_profiles,
+        hdv_profile_weights=hdv_profile_weights,
     )
 
 

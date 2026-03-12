@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from ramp.common.vehicle_defs import is_hdv
 from ramp.policies.hierarchical.merge_point import MergePointManager, MergePointParams, VehicleState
 from ramp.policies.hierarchical.state_collector_ext import ZoneAInfo
 from ramp.policies.hierarchical.zone_a import ZoneAEvacuator
@@ -81,7 +82,7 @@ def _compute_plan_once(
         lane_id = str(vehicle_state.get('lane_id', ''))
 
         raw_type = vehicle_types.get(veh_id, 'hdv')
-        vtype = raw_type if raw_type in ('cav', 'hdv') else 'hdv'
+        vtype = 'cav' if raw_type == 'cav' else 'hdv'
         veh_type_by_id[veh_id] = vtype
 
         stream_vmax = _stream_vmax(

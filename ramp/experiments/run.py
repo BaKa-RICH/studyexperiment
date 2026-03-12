@@ -45,7 +45,7 @@ from ramp.runtime.takeover import (
     parse_takeover_mode,
 )
 from ramp.runtime.ttc import build_ttc_metrics, collect_ttc_samples
-from ramp.common.vehicle_defs import VEH_TYPE_HDV, validate_rou_vtypes
+from ramp.common.vehicle_defs import VEH_TYPE_HDV, is_hdv, validate_rou_vtypes
 
 
 def _ensure_sumo_tools_on_path() -> None:
@@ -488,12 +488,12 @@ def run_experiment(
 
                 for veh_id in sorted(entered_this_step):
                     stream = str(state_collector.entry_info.get(veh_id, {}).get('stream', 'unknown'))
-                    if stream == 'ramp' and hier_vehicle_types.get(veh_id, '') != VEH_TYPE_HDV:
+                    if stream == 'ramp' and not is_hdv(hier_vehicle_types.get(veh_id, '')):
                         vtype = hier_vehicle_types.get(veh_id, '')
                         if vtype == '' and veh_id in active_vehicle_ids:
                             vtype = traci.vehicle.getTypeID(veh_id)
                             hier_vehicle_types[veh_id] = vtype
-                        if vtype != VEH_TYPE_HDV:
+                        if not is_hdv(vtype):
                             eligible_ramp_cav_ids.add(veh_id)
                     event_writer.writerow(
                         {
@@ -833,7 +833,7 @@ def run_experiment(
                     if veh_id not in control_zone_state:
                         continue
                     vehicle_state = control_zone_state[veh_id]
-                    if traci.vehicle.getTypeID(veh_id) == VEH_TYPE_HDV:
+                    if is_hdv(traci.vehicle.getTypeID(veh_id)):
                         continue
                     controlled_cav_steps += 1
                     covered_control_cav_steps += 1
@@ -893,7 +893,7 @@ def run_experiment(
                 for veh_id in sorted(lane_change_command_ids - set(command.set_speed_mps)):
                     if veh_id not in control_zone_state:
                         continue
-                    if traci.vehicle.getTypeID(veh_id) == VEH_TYPE_HDV:
+                    if is_hdv(traci.vehicle.getTypeID(veh_id)):
                         continue
                     control_event_index += 1
                     control_writer.writerow(
