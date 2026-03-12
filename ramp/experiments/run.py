@@ -357,7 +357,7 @@ def run_experiment(
         delta_1_s=delta_1_s,
         delta_2_s=delta_2_s,
     )
-    hier_control_mode = 'E-ctrl-2' if policy == 'hierarchical' else control_mode
+    effective_control_mode = control_mode
     state_collector = StateCollector(
         control_zone_length_m=control_zone_length_m,
         merge_edge=merge_edge,
@@ -365,7 +365,7 @@ def run_experiment(
         main_vmax_mps=main_vmax_mps,
         ramp_vmax_mps=ramp_vmax_mps,
         fifo_gap_s=fifo_gap_s,
-        control_mode=hier_control_mode,
+        control_mode=effective_control_mode,
         aux_vmax_mps=aux_vmax_mps,
     )
     dp_scheduler: DPScheduler | None = None
@@ -451,6 +451,11 @@ def run_experiment(
                     collected_state = state_collector.collect(sim_time=sim_time, traci=traci)
                 active_vehicle_ids = collected_state.active_vehicle_ids
                 control_zone_state = collected_state.control_zone_state
+
+                if policy != 'hierarchical' and policy != 'no_control':
+                    for vid in control_zone_state:
+                        if vid not in hier_vehicle_types:
+                            hier_vehicle_types[vid] = traci.vehicle.getTypeID(vid)
                 if sim_time >= ttc_warmup_s:
                     longitudinal_samples, merge_conflict_samples = collect_ttc_samples(
                         ttc_observation_state=collected_state.ttc_observation_state
@@ -459,7 +464,7 @@ def run_experiment(
                     ttc_merge_conflict_samples.extend(merge_conflict_samples)
                 controller.apply_lane_change_modes(
                     control_zone_state=control_zone_state,
-                    vehicle_types=hier_vehicle_types if policy == 'hierarchical' else None,
+                    vehicle_types=hier_vehicle_types if hier_vehicle_types else None,
                 )
                 control_zone_ids = set(control_zone_state)
                 entered_this_step = control_zone_ids - prev_control_zone_ids
@@ -621,6 +626,7 @@ def run_experiment(
                             main_vmax_mps=main_vmax_mps,
                             ramp_vmax_mps=ramp_vmax_mps,
                             aux_vmax_mps=aux_vmax_mps,
+                            vehicle_types=hier_vehicle_types if hier_vehicle_types else None,
                         )
                     elif policy == 'hierarchical':
                         command = build_hierarchical_command(
@@ -646,6 +652,7 @@ def run_experiment(
                             main_vmax_mps=main_vmax_mps,
                             ramp_vmax_mps=ramp_vmax_mps,
                             aux_vmax_mps=aux_vmax_mps,
+                            vehicle_types=hier_vehicle_types if hier_vehicle_types else None,
                         )
                     zone_a_event_count += len(zone_a_action_ids)
                     zone_c_event_count += len(zone_c_action_ids)
@@ -720,6 +727,7 @@ def run_experiment(
                                 zoneb_algorithm=policy,
                                 merge_policy=merge_policy,
                                 veh_id=veh_id,
+                                vehicle_type=hier_vehicle_types.get(veh_id, ''),
                                 sequence_rank=order_index,
                                 target_predecessor_id=target_predecessor_id,
                                 target_follower_id=target_follower_id,
@@ -1148,13 +1156,14 @@ def run_experiment(
         'delta_1_s': delta_1_s,
         'delta_2_s': delta_2_s,
         'dp_replan_interval_s': dp_replan_interval_s,
-        'control_mode': hier_control_mode,
+        'control_mode': effective_control_mode,
         'ramp_lc_target_lane': ramp_lc_target_lane,
         'aux_vmax_mps': aux_vmax_mps,
         'cav_ratio': cav_ratio,
         'ttc_warmup_s': ttc_warmup_s,
         'takeover_mode': takeover_mode,
         'generate_rou': generate_rou,
+        'baseline_role': 'diagnostic_only' if policy == 'no_control' else 'baseline',
         'output_dir': str(out_path),
     }
     if rou_meta is not None:

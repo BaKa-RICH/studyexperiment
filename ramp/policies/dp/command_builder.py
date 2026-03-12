@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ramp.common.vehicle_defs import VEH_TYPE_CAV, VEH_TYPE_HDV
 from ramp.runtime.types import ControlCommand, Plan
 
 
@@ -29,9 +30,14 @@ def build_command(
     main_vmax_mps: float,
     ramp_vmax_mps: float,
     aux_vmax_mps: float | None = None,
+    vehicle_types: dict[str, str] | None = None,
 ) -> ControlCommand:
     set_speed_mps: dict[str, float] = {}
     for veh_id in plan.order:
+        if vehicle_types is not None:
+            veh_type = vehicle_types.get(veh_id, VEH_TYPE_HDV)
+            if veh_type != VEH_TYPE_CAV:
+                continue
         vehicle_state = control_zone_state[veh_id]
         stream = str(vehicle_state['stream'])
         lane_id = str(vehicle_state.get('lane_id', ''))
