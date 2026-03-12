@@ -169,6 +169,83 @@
         <div class="msg-content">VOTE(7项): 4类HDV+参数温和化; is_hdv()白名单含&#x27;hdv&#x27;; write_vtypes写全; --hdv-profile-weights; dp_mixed修硬编码; 下游is_hdv(); 测试</div>
       </div>
     </div>
+    <div class="msg execution opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">EXECUTION</span>
+          <span class="msg-time">Step8-5</span>
+        </div>
+        <div class="msg-content">Todo 3.1完成: 149测试PASS, Sonnet 7/7, Gemini 5/5, Gate1/2/3 PASS, commit 91b39a7</div>
+      </div>
+    </div>
+    <div class="msg context-share opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">CONTEXT_SHARE</span>
+          <span class="msg-time">Step9-1</span>
+        </div>
+        <div class="msg-content">Todo 3.2调查: ttc_any_lt_3_0s_ratio已有, replan_rate已有, fallback_rate仅by_reason无标量, merge_conflict_exposure未实现, pending/queue仅有pending_unfinished_count. PainScore未定义. run_experiment()未传use_profiles/hdv_profile_weights.</div>
+      </div>
+    </div>
+    <div class="msg proposal opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">PROPOSAL</span>
+          <span class="msg-time">Step9-2</span>
+        </div>
+        <div class="msg-content">7项原方案</div>
+      </div>
+    </div>
+    <div class="msg gpt gpt">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">GPT</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">Step9-3</span>
+        </div>
+        <div class="msg-content">FIX-1 FLAG(主口径用fallback_count/entered). FIX-2 FLAG. FIX-3 FLAG(命名). FIX-4 FLAG(冻结归一化). FIX-5 APPROVE. FIX-6 APPROVE.</div>
+      </div>
+    </div>
+    <div class="msg sonnet sonnet">
+      <div class="msg-avatar">S</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Sonnet</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">Step9-3</span>
+        </div>
+        <div class="msg-content">FIX-2 APPROVE(已有字段). <strong>FIX-6 FLAG(阻塞): traci不可重入必须subprocess</strong>. FIX-3 FLAG(截断残留非队列). FIX-5 APPROVE(补config记录).</div>
+      </div>
+    </div>
+    <div class="msg gemini gemini">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Gemini</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">Step9-3</span>
+        </div>
+        <div class="msg-content">PainScore=相对H0百分比变化. H0=hdv_normal. cav_ratio=0.5. <strong>废弃ramp_min_v1用高流量场景</strong>.</div>
+      </div>
+    </div>
+    <div class="msg vote opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">VOTE</span>
+          <span class="msg-time">Step9-4</span>
+        </div>
+        <div class="msg-content">VOTE(8项): PainScore=Gemini公式(相对H0变化率); fallback_rate标量; merge_conflict_exposure归一化; pending改名cutoff_residual_ratio; run_experiment扩展+config记录; subprocess模式runner; 高流量generate_rou; 测试</div>
+      </div>
+    </div>
   </div>
 </div>
 </body>

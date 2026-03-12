@@ -370,6 +370,8 @@ def build_evidence_metrics(
     fallback_rate_by_reason: dict[str, float] = {}
     for reason, count in sorted(fallback_counter.items()):
         fallback_rate_by_reason[reason] = count / len(feedback_rows) if feedback_rows else 0.0
+    fallback_total_count = sum(fallback_counter.values())
+    fallback_rate = fallback_total_count / len(feedback_rows) if feedback_rows else 0.0
 
     replan_rate = replan_required_count / len(feedback_rows) if feedback_rows else 0.0
     zone_a_event_rate = zone_a_event_count / duration_s if duration_s > 0 else 0.0
@@ -387,6 +389,7 @@ def build_evidence_metrics(
         'planned_actual_time_error_p95_s': percentile(planned_actual_time_errors, 0.95),
         'planned_actual_position_error_p50_m': percentile(planned_actual_position_errors, 0.50),
         'planned_actual_position_error_p95_m': percentile(planned_actual_position_errors, 0.95),
+        'fallback_rate': fallback_rate,
         'fallback_rate_by_reason': fallback_rate_by_reason,
         'replan_rate': replan_rate,
         'zone_a_event_rate': zone_a_event_rate,

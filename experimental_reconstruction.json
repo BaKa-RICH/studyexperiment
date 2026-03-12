@@ -10,6 +10,13 @@
     {"agent": "GPT", "type": "REVIEW", "time": "Step8-3", "content": "FLAG: 拆分aggressive/hesitant, is_hdv用白名单, 向后兼容"},
     {"agent": "Sonnet", "type": "REVIEW", "time": "Step8-3", "content": "FLAG: **dp_mixed.py L69/81/83硬编码'hdv'→阻塞性遗漏**"},
     {"agent": "Gemini", "type": "REVIEW", "time": "Step8-3", "content": "REJECT: 拆分aggressive/hesitant, 参数温和化, is_hdv含旧'hdv'"},
-    {"agent": "Opus", "type": "VOTE", "time": "Step8-4", "content": "VOTE(7项): 4类HDV+参数温和化; is_hdv()白名单含'hdv'; write_vtypes写全; --hdv-profile-weights; dp_mixed修硬编码; 下游is_hdv(); 测试"}
+    {"agent": "Opus", "type": "VOTE", "time": "Step8-4", "content": "VOTE(7项): 4类HDV+参数温和化; is_hdv()白名单含'hdv'; write_vtypes写全; --hdv-profile-weights; dp_mixed修硬编码; 下游is_hdv(); 测试"},
+    {"agent": "Opus", "type": "EXECUTION", "time": "Step8-5", "content": "Todo 3.1完成: 149测试PASS, Sonnet 7/7, Gemini 5/5, Gate1/2/3 PASS, commit 91b39a7"},
+    {"agent": "Opus", "type": "CONTEXT_SHARE", "time": "Step9-1", "content": "Todo 3.2调查: ttc_any_lt_3_0s_ratio已有, replan_rate已有, fallback_rate仅by_reason无标量, merge_conflict_exposure未实现, pending/queue仅有pending_unfinished_count. PainScore未定义. run_experiment()未传use_profiles/hdv_profile_weights."},
+    {"agent": "Opus", "type": "PROPOSAL", "time": "Step9-2", "content": "7项原方案"},
+    {"agent": "GPT", "type": "REVIEW", "time": "Step9-3", "content": "FIX-1 FLAG(主口径用fallback_count/entered). FIX-2 FLAG. FIX-3 FLAG(命名). FIX-4 FLAG(冻结归一化). FIX-5 APPROVE. FIX-6 APPROVE."},
+    {"agent": "Sonnet", "type": "REVIEW", "time": "Step9-3", "content": "FIX-2 APPROVE(已有字段). **FIX-6 FLAG(阻塞): traci不可重入必须subprocess**. FIX-3 FLAG(截断残留非队列). FIX-5 APPROVE(补config记录)."},
+    {"agent": "Gemini", "type": "REVIEW", "time": "Step9-3", "content": "PainScore=相对H0百分比变化. H0=hdv_normal. cav_ratio=0.5. **废弃ramp_min_v1用高流量场景**."},
+    {"agent": "Opus", "type": "VOTE", "time": "Step9-4", "content": "VOTE(8项): PainScore=Gemini公式(相对H0变化率); fallback_rate标量; merge_conflict_exposure归一化; pending改名cutoff_residual_ratio; run_experiment扩展+config记录; subprocess模式runner; 高流量generate_rou; 测试"}
   ]
 }

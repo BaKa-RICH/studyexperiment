@@ -174,6 +174,8 @@ def run_experiment(
     ramp_vph: int = 500,
     rou_duration: int = 300,
     arrival_mode: str = 'uniform',
+    use_profiles: bool = False,
+    hdv_profile_weights: dict[str, float] | None = None,
 ) -> int:
     if duration_s <= 0:
         raise ValueError('duration-s must be > 0')
@@ -222,6 +224,8 @@ def run_experiment(
             duration=rou_duration,
             arrival_mode=arrival_mode,
             output=out_path / 'generated.rou.xml',
+            use_profiles=use_profiles,
+            hdv_profile_weights=hdv_profile_weights,
         )
         logger.info('Generated rou.xml at %s (seed=%s, cav_ratio=%.2f)',
                      generated_rou_path, seed, cav_ratio)
@@ -1221,6 +1225,8 @@ def run_experiment(
         'ttc_warmup_s': ttc_warmup_s,
         'takeover_mode': takeover_mode,
         'generate_rou': generate_rou,
+        'use_profiles': use_profiles,
+        'hdv_profile_weights': hdv_profile_weights,
         'baseline_role': 'diagnostic_only' if policy == 'no_control' else 'baseline',
         'output_dir': str(out_path),
     }
@@ -1317,6 +1323,10 @@ def main() -> int:
                         help='Vehicle generation duration in seconds (only with --generate-rou).')
     parser.add_argument('--arrival-mode', choices=['uniform', 'poisson'], default='uniform',
                         help='Vehicle arrival distribution (only with --generate-rou).')
+    parser.add_argument('--use-profiles', action='store_true', default=False,
+                        help='Use heterogeneous HDV profiles (only with --generate-rou).')
+    parser.add_argument('--hdv-profile-weights', type=str, default=None,
+                        help='HDV profile weights as name:w,... (implies --use-profiles).')
     parser.add_argument(
         '--gui',
         action='store_true',
@@ -1353,7 +1363,21 @@ def main() -> int:
         ramp_vph=args.ramp_vph,
         rou_duration=args.rou_duration,
         arrival_mode=args.arrival_mode,
+        use_profiles=_resolve_use_profiles(args),
+        hdv_profile_weights=_parse_cli_weights(args),
     )
+
+
+def _resolve_use_profiles(args: argparse.Namespace) -> bool:
+    return args.use_profiles or args.hdv_profile_weights is not None
+
+
+def _parse_cli_weights(args: argparse.Namespace) -> dict[str, float] | None:
+    raw = args.hdv_profile_weights
+    if raw is None:
+        return None
+    from ramp.tools.generate_mixed_rou import parse_hdv_profile_weights
+    return parse_hdv_profile_weights(raw)
 
 
 if __name__ == '__main__':
