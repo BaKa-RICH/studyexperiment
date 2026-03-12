@@ -364,7 +364,7 @@ def _collect_zone_c_cav_states(
         vtype = vehicle_types.get(veh_id, '')
         if not vtype:
             vtype = traci.vehicle.getTypeID(veh_id)
-        if vtype != 'cav':
+        if is_hdv(vtype):
             continue
         pos = float(traci.vehicle.getLanePosition(veh_id))
         speed = float(traci.vehicle.getSpeed(veh_id))

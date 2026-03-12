@@ -159,12 +159,16 @@ class Controller:
                     self.traci.vehicle.setLaneChangeMode(veh_id, LC_MODE_PROHIBIT_ALL)
                 continue
 
+            vtype = (vehicle_types or {}).get(veh_id, '')
             if stream == 'main':
                 self.traci.vehicle.setLaneChangeMode(veh_id, LC_MODE_PROHIBIT_ALL)
             elif stream == 'ramp':
                 lane_index = int(lane_id.split('_')[-1]) if '_' in lane_id else -1
                 if lane_index == 0:
-                    pass
+                    if not is_hdv(vtype):
+                        self.traci.vehicle.setLaneChangeMode(
+                            veh_id, LC_MODE_PROHIBIT_ALL,
+                        )
                 elif lane_index >= 1 and self.ramp_lc_target_lane != -1:
                     if lane_index >= self.ramp_lc_target_lane:
                         self.traci.vehicle.setLaneChangeMode(veh_id, LC_MODE_PROHIBIT_ALL)
