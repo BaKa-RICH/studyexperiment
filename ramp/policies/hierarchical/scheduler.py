@@ -356,22 +356,28 @@ def _collect_zone_c_cav_states(
     vehicle_types: dict[str, str],
     traci: Any,
 ) -> dict[str, VehicleState]:
-    """Collect ramp-stream CAV states on main_h3 lane 0 for Zone C merge evaluation."""
+    """Collect CAV states on main_h3 lanes 0 and 1 for Zone C merge evaluation.
+
+    Lane 0 vehicles are candidates for new merge tracking.
+    Lane 1 vehicles are needed to detect MERGING→MERGED completion
+    (vehicles that just changed from L0 to L1).
+    """
     cav_states: dict[str, VehicleState] = {}
-    lane_id = 'main_h3_0'
-    veh_ids = traci.lane.getLastStepVehicleIDs(lane_id)
-    for veh_id in veh_ids:
-        vtype = vehicle_types.get(veh_id, '')
-        if not vtype:
-            vtype = traci.vehicle.getTypeID(veh_id)
-        if is_hdv(vtype):
-            continue
-        pos = float(traci.vehicle.getLanePosition(veh_id))
-        speed = float(traci.vehicle.getSpeed(veh_id))
-        cav_states[veh_id] = VehicleState(
-            edge_id='main_h3',
-            lane_index=0,
-            lane_pos_m=pos,
-            speed_mps=speed,
-        )
+    for lane_idx in (0, 1):
+        lane_id = f'main_h3_{lane_idx}'
+        veh_ids = traci.lane.getLastStepVehicleIDs(lane_id)
+        for veh_id in veh_ids:
+            vtype = vehicle_types.get(veh_id, '')
+            if not vtype:
+                vtype = traci.vehicle.getTypeID(veh_id)
+            if is_hdv(vtype):
+                continue
+            pos = float(traci.vehicle.getLanePosition(veh_id))
+            speed = float(traci.vehicle.getSpeed(veh_id))
+            cav_states[veh_id] = VehicleState(
+                edge_id='main_h3',
+                lane_index=lane_idx,
+                lane_pos_m=pos,
+                speed_mps=speed,
+            )
     return cav_states

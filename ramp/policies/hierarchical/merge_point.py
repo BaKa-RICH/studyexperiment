@@ -75,6 +75,8 @@ class _MergeTracker:
     merge_start_pos_m: float | None = None
     failure_count: int = 0
     last_eval: MergeEvalResult | None = None
+    planned_lead_id: str | None = None
+    planned_follow_id: str | None = None
 
 
 def _evaluate_gap_safety(
@@ -205,12 +207,19 @@ class MergePointManager:
       SEARCHING   --> MERGING    (feasible gap found or fallback triggered)
       MERGING     --> MERGED     (lane change complete: lane_index == 1)
       MERGING     --> SEARCHING  (timeout + retries remaining + pos < fallback)
+
+    Emergency: if a CAV reaches lane0_length - EMERGENCY_BUFFER_M without
+    merging, an emergency changeLane is forced to prevent SUMO teleportation.
     """
+
+    EMERGENCY_BUFFER_M = 10.0
 
     def __init__(self, params: MergePointParams | None = None):
         self.params = params or MergePointParams()
         self._trackers: dict[str, _MergeTracker] = {}
         self.merge_history: list[dict[str, object]] = []
+        self.merge_event_log: list[dict[str, object]] = []
+        self._event_cursor: int = 0
 
     @property
     def vehicle_states(self) -> dict[str, MergeState]:
@@ -219,6 +228,21 @@ class MergePointManager:
 
     def get_tracker(self, veh_id: str) -> _MergeTracker | None:
         return self._trackers.get(veh_id)
+
+    def consume_events_since_cursor(self) -> list[dict[str, object]]:
+        """Return events appended since the last consumption, advance cursor."""
+        new_events = self.merge_event_log[self._event_cursor:]
+        self._event_cursor = len(self.merge_event_log)
+        return new_events
+
+    def _emit(self, event_type: str, veh_id: str, sim_time_s: float, **kwargs):
+        entry: dict[str, object] = {
+            'event_type': event_type,
+            'veh_id': veh_id,
+            'sim_time_s': sim_time_s,
+        }
+        entry.update(kwargs)
+        self.merge_event_log.append(entry)
 
     def update(
         self,
@@ -236,6 +260,7 @@ class MergePointManager:
             Lane-change actions to issue: ``{veh_id: (target_lane, duration_s)}``.
         """
         actions: dict[str, tuple[int, float]] = {}
+        emergency_pos = self.params.lane0_length_m - self.EMERGENCY_BUFFER_M
 
         sorted_cavs = sorted(
             cav_states.items(),
@@ -253,10 +278,34 @@ class MergePointManager:
                 tracker = _MergeTracker()
                 self._trackers[veh_id] = tracker
 
+            # Emergency: force merge near edge end to prevent teleportation
+            if (
+                on_merge_lane
+                and vs.lane_pos_m >= emergency_pos
+                and tracker.state not in (MergeState.MERGING, MergeState.MERGED)
+            ):
+                tracker.state = MergeState.MERGING
+                tracker.merge_start_time_s = sim_time_s
+                tracker.merge_start_pos_m = vs.lane_pos_m
+                actions[veh_id] = (1, self.params.t_lc_s)
+                self._emit(
+                    'emergency_lc', veh_id, sim_time_s,
+                    pos_m=vs.lane_pos_m, speed_mps=vs.speed_mps,
+                )
+                logger.warning(
+                    '[MergePoint] %s EMERGENCY LC at pos=%.1fm (edge end imminent)',
+                    veh_id, vs.lane_pos_m,
+                )
+                continue
+
             # Phase 1: APPROACHING -> SEARCHING
             if tracker.state == MergeState.APPROACHING:
                 if on_merge_lane and vs.lane_pos_m >= self.params.search_start_pos_m:
                     tracker.state = MergeState.SEARCHING
+                    self._emit(
+                        'merge_search_start', veh_id, sim_time_s,
+                        pos_m=vs.lane_pos_m, speed_mps=vs.speed_mps,
+                    )
                     logger.info(
                         '[MergePoint] %s APPROACHING->SEARCHING pos=%.1fm speed=%.1fm/s',
                         veh_id, vs.lane_pos_m, vs.speed_mps,
@@ -266,6 +315,13 @@ class MergePointManager:
             if tracker.state == MergeState.MERGING:
                 if vs.lane_index == 1:
                     tracker.state = MergeState.MERGED
+                    self._emit(
+                        'lc_complete', veh_id, sim_time_s,
+                        pos_m=vs.lane_pos_m, speed_mps=vs.speed_mps,
+                        planned_lead_id=tracker.planned_lead_id,
+                        planned_follow_id=tracker.planned_follow_id,
+                        is_fallback=tracker.last_eval.is_fallback if tracker.last_eval else False,
+                    )
                     logger.info(
                         '[MergePoint] %s MERGED at t=%.1fs pos=%.1fm',
                         veh_id, sim_time_s, vs.lane_pos_m,
@@ -297,8 +353,17 @@ class MergePointManager:
                         and vs.lane_pos_m < fallback_pos
                     ):
                         tracker.state = MergeState.SEARCHING
+                        self._emit(
+                            'lc_timeout_retry', veh_id, sim_time_s,
+                            pos_m=vs.lane_pos_m, attempt=tracker.failure_count,
+                        )
                     else:
                         actions[veh_id] = (1, self.params.t_lc_s)
+                        self._emit(
+                            'fallback', veh_id, sim_time_s,
+                            pos_m=vs.lane_pos_m, reason='max_retries_or_fallback_pos',
+                            attempt=tracker.failure_count,
+                        )
 
             # Phase 3: SEARCHING -> evaluate gap -> potentially MERGING
             if tracker.state == MergeState.SEARCHING:
@@ -313,7 +378,20 @@ class MergePointManager:
                     tracker.state = MergeState.MERGING
                     tracker.merge_start_time_s = sim_time_s
                     tracker.merge_start_pos_m = vs.lane_pos_m
+                    tracker.planned_lead_id = result.lead_id
+                    tracker.planned_follow_id = result.follow_id
                     actions[veh_id] = (1, self.params.t_lc_s)
+                    event_type = 'fallback_lc_issued' if result.is_fallback else 'lc_issued'
+                    self._emit(
+                        event_type, veh_id, sim_time_s,
+                        pos_m=vs.lane_pos_m, speed_mps=vs.speed_mps,
+                        gap_front_m=result.gap_front_m,
+                        gap_rear_m=result.gap_rear_m,
+                        safety_margin=result.safety_margin,
+                        lead_id=result.lead_id,
+                        follow_id=result.follow_id,
+                        is_fallback=result.is_fallback,
+                    )
                     logger.info(
                         '[MergePoint] %s SEARCHING->MERGING feasible gap_f=%.1f gap_r=%.1f '
                         'margin=%.1f fallback=%s pos=%.1fm',
@@ -324,9 +402,10 @@ class MergePointManager:
                         result.is_fallback, vs.lane_pos_m,
                     )
                 else:
-                    logger.debug(
-                        '[MergePoint] %s SEARCHING infeasible pos=%.1fm n_l1=%d',
-                        veh_id, vs.lane_pos_m, len(lane1_vehicles),
+                    self._emit(
+                        'gap_reject', veh_id, sim_time_s,
+                        pos_m=vs.lane_pos_m, speed_mps=vs.speed_mps,
+                        n_lane1=len(lane1_vehicles),
                     )
 
         return actions

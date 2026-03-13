@@ -918,87 +918,88 @@ def run_experiment(
                             'controlled_cav_step': 0,
                         }
                     )
-                for veh_id, lane_changed in lane_changed_by_vehicle.items():
-                    if not lane_changed:
-                        continue
-                    previous_lane_id = prev_lane_id_by_vehicle.get(veh_id, '')
-                    current_lane_id = str(control_zone_state[veh_id]['lane_id'])
-                    if (
-                        previous_lane_id.startswith('main_h3_0')
-                        and current_lane_id.startswith('main_h3_1')
-                        and veh_id in zone_c_chain_status
-                        and not zone_c_chain_status[veh_id]
-                    ):
-                        zone_c_chain_status[veh_id] = True
-                        zone_c_chain_complete_count += 1
-                        lc_complete_vehicle_ids.add(veh_id)
-                        lc_stream = str(state_collector.entry_info.get(veh_id, {}).get('stream', 'unknown'))
-                        contract_id = latest_contract_by_vehicle.get(veh_id, '')
-                        contract_snapshot = contract_by_id.get(contract_id, {})
-                        actual_merge_position_m = float(control_zone_state[veh_id].get('d_to_merge', 0.0))
-                        planned_actual_time_error_s: float | str = ''
-                        planned_actual_position_error_m: float | str = ''
-                        lc_is_authoritative = merge_policy == MERGE_POLICY_FLEXIBLE
-                        if contract_id:
-                            expected_merge_time_s = float(
-                                contract_snapshot.get('expected_merge_time_s', sim_time)
-                            )
-                            expected_merge_position_value = float(
-                                contract_snapshot.get(
-                                    'expected_merge_position_m', actual_merge_position_m
+                if hier_scheduler is not None and hier_scheduler._merge_point_mgr is not None:
+                    merge_events = hier_scheduler._merge_point_mgr.consume_events_since_cursor()
+                    for mevt in merge_events:
+                        evt_type = str(mevt.get('event_type', ''))
+                        evt_veh = str(mevt.get('veh_id', ''))
+                        if evt_type == 'lc_complete':
+                            if evt_veh in zone_c_chain_status and not zone_c_chain_status[evt_veh]:
+                                zone_c_chain_status[evt_veh] = True
+                                zone_c_chain_complete_count += 1
+                            lc_complete_vehicle_ids.add(evt_veh)
+                            lc_stream = str(state_collector.entry_info.get(evt_veh, {}).get('stream', 'unknown'))
+                            contract_id = latest_contract_by_vehicle.get(evt_veh, '')
+                            contract_snapshot = contract_by_id.get(contract_id, {})
+                            actual_merge_position_m = float(mevt.get('pos_m', 0.0))
+                            planned_actual_time_error_s: float | str = ''
+                            planned_actual_position_error_m: float | str = ''
+                            lc_is_authoritative = merge_policy == MERGE_POLICY_FLEXIBLE
+                            if contract_id:
+                                expected_merge_time_s = float(
+                                    contract_snapshot.get('expected_merge_time_s', sim_time)
                                 )
-                            )
-                            planned_actual_time_error_s = sim_time - expected_merge_time_s
-                            planned_actual_position_error_m = (
-                                actual_merge_position_m - expected_merge_position_value
-                            )
-                            if lc_is_authoritative:
-                                planned_actual_time_errors.append(abs(planned_actual_time_error_s))
-                                planned_actual_position_errors.append(
-                                    abs(planned_actual_position_error_m)
+                                expected_merge_position_value = float(
+                                    contract_snapshot.get(
+                                        'expected_merge_position_m', actual_merge_position_m
+                                    )
                                 )
-                                feedback_vehicle_ids.add(veh_id)
-                        lc_gap_lead_id = ''
-                        lc_gap_follow_id = ''
-                        lc_fallback_reason = ''
-                        if hier_scheduler is not None and hier_scheduler._merge_point_mgr is not None:
-                            for hist in reversed(hier_scheduler._merge_point_mgr.merge_history):
-                                if hist['veh_id'] == veh_id:
-                                    lc_gap_lead_id = hist.get('gap_lead_id', '') or ''
-                                    lc_gap_follow_id = hist.get('gap_follow_id', '') or ''
-                                    if hist.get('is_fallback', False):
-                                        lc_fallback_reason = 'position_fallback'
-                                    break
-                        feedback_event_index += 1
-                        feedback_rows.append(
-                            {
-                                'time': sim_time,
-                                'event_id': f'feedback_{feedback_event_index:08d}',
-                                'contract_id': contract_id,
-                                'ego_vehicle_id': veh_id,
-                                'stream': lc_stream,
-                                'anchor_event_type': ANCHOR_EVENT_LC_COMPLETE,
-                                'execution_state': 'lc_complete',
-                                'gap_found': 1,
-                                'gap_reject_reason': '',
-                                'actual_merge_time_s': sim_time,
-                                'actual_merge_position_m': actual_merge_position_m,
-                                'actual_predecessor_id': lc_gap_lead_id,
-                                'actual_follower_id': lc_gap_follow_id,
-                                'planned_actual_time_error_s': planned_actual_time_error_s,
-                                'planned_actual_position_error_m': planned_actual_position_error_m,
-                                'fallback_reason': lc_fallback_reason,
-                                'replan_required': int(plan_recomputed),
-                            }
-                        )
-                        event_writer.writerow(
-                            {
-                                'time': sim_time,
-                                'event': 'zone_c_lc_complete',
-                                'veh_id': veh_id,
-                                'detail': '',
-                            }
-                        )
+                                planned_actual_time_error_s = sim_time - expected_merge_time_s
+                                planned_actual_position_error_m = (
+                                    actual_merge_position_m - expected_merge_position_value
+                                )
+                                if lc_is_authoritative:
+                                    planned_actual_time_errors.append(abs(planned_actual_time_error_s))
+                                    planned_actual_position_errors.append(
+                                        abs(planned_actual_position_error_m)
+                                    )
+                                    feedback_vehicle_ids.add(evt_veh)
+                            lc_gap_lead_id = str(mevt.get('planned_lead_id', '') or '')
+                            lc_gap_follow_id = str(mevt.get('planned_follow_id', '') or '')
+                            lc_fallback_reason = ''
+                            if mevt.get('is_fallback', False):
+                                lc_fallback_reason = 'position_fallback'
+                            feedback_event_index += 1
+                            feedback_rows.append(
+                                {
+                                    'time': sim_time,
+                                    'event_id': f'feedback_{feedback_event_index:08d}',
+                                    'contract_id': contract_id,
+                                    'ego_vehicle_id': evt_veh,
+                                    'stream': lc_stream,
+                                    'anchor_event_type': ANCHOR_EVENT_LC_COMPLETE,
+                                    'execution_state': 'lc_complete',
+                                    'gap_found': 1,
+                                    'gap_reject_reason': '',
+                                    'actual_merge_time_s': sim_time,
+                                    'actual_merge_position_m': actual_merge_position_m,
+                                    'actual_predecessor_id': lc_gap_lead_id,
+                                    'actual_follower_id': lc_gap_follow_id,
+                                    'planned_actual_time_error_s': planned_actual_time_error_s,
+                                    'planned_actual_position_error_m': planned_actual_position_error_m,
+                                    'fallback_reason': lc_fallback_reason,
+                                    'replan_required': int(plan_recomputed),
+                                }
+                            )
+                            event_writer.writerow(
+                                {
+                                    'time': sim_time,
+                                    'event': 'zone_c_lc_complete',
+                                    'veh_id': evt_veh,
+                                    'detail': evt_type,
+                                }
+                            )
+                        elif evt_type in ('emergency_lc', 'fallback', 'merge_search_start',
+                                          'lc_issued', 'fallback_lc_issued', 'gap_reject',
+                                          'lc_timeout_retry'):
+                            event_writer.writerow(
+                                {
+                                    'time': sim_time,
+                                    'event': f'zone_c_{evt_type}',
+                                    'veh_id': evt_veh,
+                                    'detail': str(mevt.get('reason', '')),
+                                }
+                            )
                 for veh_id in sorted(controller_result.takeover_ids):
                     event_writer.writerow(
                         {

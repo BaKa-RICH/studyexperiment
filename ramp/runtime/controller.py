@@ -144,6 +144,7 @@ class Controller:
                 if is_hdv(vtype):
                     continue
                 self.traci.vehicle.setLaneChangeMode(veh_id, LC_MODE_PROHIBIT_ALL)
+            self._enforce_merge_lane_lc_mode(vehicle_types=vehicle_types)
             return
 
         for veh_id, vehicle_state in control_zone_state.items():
@@ -172,6 +173,29 @@ class Controller:
                 elif lane_index >= 1 and self.ramp_lc_target_lane != -1:
                     if lane_index >= self.ramp_lc_target_lane:
                         self.traci.vehicle.setLaneChangeMode(veh_id, LC_MODE_PROHIBIT_ALL)
+
+        self._enforce_merge_lane_lc_mode(vehicle_types=vehicle_types)
+
+    def _enforce_merge_lane_lc_mode(
+        self,
+        *,
+        vehicle_types: dict[str, str] | None = None,
+    ) -> None:
+        """Block autonomous lane changes for CAVs on main_h3_0.
+
+        Vehicles on main_h3 are not in control_zone_state (d_to_merge <= 0
+        once past the merge junction), so the regular control_zone_state loop
+        never covers them.  This method queries TraCI directly to ensure
+        Zone C's MergePointManager has exclusive control over L0→L1 merges.
+        """
+        veh_ids = self.traci.lane.getLastStepVehicleIDs('main_h3_0')
+        for veh_id in veh_ids:
+            vtype = (vehicle_types or {}).get(veh_id, '')
+            if not vtype:
+                vtype = self.traci.vehicle.getTypeID(veh_id)
+            if is_hdv(vtype):
+                continue
+            self.traci.vehicle.setLaneChangeMode(veh_id, LC_MODE_PROHIBIT_ALL)
 
     def release_all(self, *, active_vehicle_ids: set[str]) -> ControllerApplyResult:
         result = ControllerApplyResult()
