@@ -992,12 +992,24 @@ def run_experiment(
                         elif evt_type in ('emergency_lc', 'fallback', 'merge_search_start',
                                           'lc_issued', 'fallback_lc_issued', 'gap_reject',
                                           'lc_timeout_retry'):
+                            if evt_type == 'gap_reject':
+                                detail_parts = []
+                                for dk in ('best_margin', 'binding',
+                                           'g_f', 'thr_f', 'g_r', 'thr_r',
+                                           'follow_speed', 'lead_speed',
+                                           'speed_mps', 'pos_m'):
+                                    dv = mevt.get(dk)
+                                    if dv is not None:
+                                        detail_parts.append(f'{dk}={dv}')
+                                evt_detail = ' '.join(detail_parts)
+                            else:
+                                evt_detail = str(mevt.get('reason', ''))
                             event_writer.writerow(
                                 {
                                     'time': sim_time,
                                     'event': f'zone_c_{evt_type}',
                                     'veh_id': evt_veh,
-                                    'detail': str(mevt.get('reason', '')),
+                                    'detail': evt_detail,
                                 }
                             )
                 for veh_id in sorted(controller_result.takeover_ids):

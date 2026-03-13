@@ -33,8 +33,8 @@ class MergeState(Enum):
 
 @dataclass(frozen=True)
 class MergePointParams:
-    phi_s: float = 1.5
-    t_lc_s: float = 3.0
+    phi_s: float = 1.0
+    t_lc_s: float = 2.0
     L_veh_m: float = 5.0
     s0_m: float = 5.0
     fallback_buffer_m: float = 50.0
@@ -54,6 +54,7 @@ class MergeEvalResult:
     follow_id: str | None = None
     is_fallback: bool = False
     safety_margin: float | None = None
+    reject_detail: _GapDetail | None = None
 
 
 @dataclass
@@ -79,6 +80,42 @@ class _MergeTracker:
     planned_follow_id: str | None = None
 
 
+@dataclass
+class _GapDetail:
+    """Diagnostic detail for a single gap evaluation."""
+    g_f: float | None = None
+    g_r: float | None = None
+    margin_f: float = float('inf')
+    margin_r: float = float('inf')
+    threshold_f: float | None = None
+    threshold_r: float | None = None
+    lead_id: str | None = None
+    follow_id: str | None = None
+    follow_speed: float | None = None
+    lead_speed: float | None = None
+
+    @property
+    def feasible(self) -> bool:
+        return self.margin_f >= 0.0 and self.margin_r >= 0.0
+
+    @property
+    def safety_margin(self) -> float | None:
+        finite = [m for m in (self.margin_f, self.margin_r) if m != float('inf')]
+        return min(finite) if finite else None
+
+    @property
+    def binding_constraint(self) -> str | None:
+        if self.margin_f == float('inf') and self.margin_r == float('inf'):
+            return None
+        if self.margin_f == float('inf'):
+            return 'rear'
+        if self.margin_r == float('inf'):
+            return 'front'
+        if self.margin_f < self.margin_r:
+            return 'front'
+        return 'rear'
+
+
 def _evaluate_gap_safety(
     cav_pos_m: float,
     cav_speed_mps: float,
@@ -91,33 +128,36 @@ def _evaluate_gap_safety(
     Returns (feasible, G_f_at_t_lc, G_r_at_t_lc, safety_margin).
     Gap values are None when no vehicle exists on that side.
     """
+    detail = _evaluate_gap_detail(cav_pos_m, cav_speed_mps, lead, follow, params)
+    return detail.feasible, detail.g_f, detail.g_r, detail.safety_margin
+
+
+def _evaluate_gap_detail(
+    cav_pos_m: float,
+    cav_speed_mps: float,
+    lead: tuple[str, float, float] | None,
+    follow: tuple[str, float, float] | None,
+    params: MergePointParams,
+) -> _GapDetail:
+    """Evaluate a single gap with full diagnostic detail."""
+    d = _GapDetail()
     if lead is not None:
-        _, p_l, v_l = lead
-        g_f: float | None = (
-            (p_l - cav_pos_m - params.L_veh_m)
-            + (v_l - cav_speed_mps) * params.t_lc_s
-        )
-        margin_f = g_f - (params.phi_s * v_l + params.s0_m)
-    else:
-        g_f = None
-        margin_f = float('inf')
+        lid, p_l, v_l = lead
+        d.g_f = (p_l - cav_pos_m - params.L_veh_m) + (v_l - cav_speed_mps) * params.t_lc_s
+        d.threshold_f = params.phi_s * v_l + params.s0_m
+        d.margin_f = d.g_f - d.threshold_f
+        d.lead_id = lid
+        d.lead_speed = v_l
 
     if follow is not None:
-        _, p_f, v_f = follow
-        g_r: float | None = (
-            (cav_pos_m - p_f - params.L_veh_m)
-            + (cav_speed_mps - v_f) * params.t_lc_s
-        )
-        margin_r = g_r - (params.phi_s * cav_speed_mps + params.s0_m)
-    else:
-        g_r = None
-        margin_r = float('inf')
+        fid, p_f, v_f = follow
+        d.g_r = (cav_pos_m - p_f - params.L_veh_m) + (cav_speed_mps - v_f) * params.t_lc_s
+        d.threshold_r = params.phi_s * cav_speed_mps + params.s0_m
+        d.margin_r = d.g_r - d.threshold_r
+        d.follow_id = fid
+        d.follow_speed = v_f
 
-    feasible = margin_f >= 0.0 and margin_r >= 0.0
-    finite_margins = [m for m in (margin_f, margin_r) if m != float('inf')]
-    safety_margin = min(finite_margins) if finite_margins else None
-
-    return feasible, g_f, g_r, safety_margin
+    return d
 
 
 # ---------------------------------------------------------------------------
@@ -172,26 +212,31 @@ def evaluate_merge_point(
     j = bisect.bisect_right(positions, cav_pos_m)
     k = len(sorted_vehs)
 
+    best_reject: _GapDetail | None = None
     for gap_idx in range(j, k + 1):
         follow = sorted_vehs[gap_idx - 1] if gap_idx > 0 else None
         lead = sorted_vehs[gap_idx] if gap_idx < k else None
 
-        feasible, g_f, g_r, margin = _evaluate_gap_safety(
+        detail = _evaluate_gap_detail(
             cav_pos_m, cav_speed_mps, lead, follow, params,
         )
-        if feasible:
+        if detail.feasible:
             return MergeEvalResult(
                 feasible=True,
                 merge_position_m=merge_pos,
-                gap_front_m=g_f,
-                gap_rear_m=g_r,
-                lead_id=lead[0] if lead else None,
-                follow_id=follow[0] if follow else None,
+                gap_front_m=detail.g_f,
+                gap_rear_m=detail.g_r,
+                lead_id=detail.lead_id,
+                follow_id=detail.follow_id,
                 is_fallback=False,
-                safety_margin=margin,
+                safety_margin=detail.safety_margin,
             )
+        if best_reject is None or (detail.safety_margin is not None and
+                                    (best_reject.safety_margin is None or
+                                     detail.safety_margin > best_reject.safety_margin)):
+            best_reject = detail
 
-    return MergeEvalResult(feasible=False)
+    return MergeEvalResult(feasible=False, reject_detail=best_reject)
 
 
 # ---------------------------------------------------------------------------
@@ -402,10 +447,23 @@ class MergePointManager:
                         result.is_fallback, vs.lane_pos_m,
                     )
                 else:
-                    self._emit(
-                        'gap_reject', veh_id, sim_time_s,
-                        pos_m=vs.lane_pos_m, speed_mps=vs.speed_mps,
-                        n_lane1=len(lane1_vehicles),
-                    )
+                    reject_info: dict[str, object] = {
+                        'pos_m': vs.lane_pos_m,
+                        'speed_mps': vs.speed_mps,
+                        'n_lane1': len(lane1_vehicles),
+                    }
+                    br = result.reject_detail
+                    if br is not None:
+                        reject_info.update({
+                            'best_margin': br.safety_margin,
+                            'binding': br.binding_constraint,
+                            'g_f': br.g_f,
+                            'g_r': br.g_r,
+                            'thr_f': br.threshold_f,
+                            'thr_r': br.threshold_r,
+                            'follow_speed': br.follow_speed,
+                            'lead_speed': br.lead_speed,
+                        })
+                    self._emit('gap_reject', veh_id, sim_time_s, **reject_info)
 
         return actions
