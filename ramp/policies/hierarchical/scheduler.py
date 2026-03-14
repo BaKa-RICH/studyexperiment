@@ -8,7 +8,7 @@ from ramp.common.vehicle_defs import is_hdv
 from ramp.policies.hierarchical.merge_point import MergePointManager, MergePointParams, VehicleState
 from ramp.policies.hierarchical.state_collector_ext import ZoneAInfo
 from ramp.policies.hierarchical.zone_a import ZoneAEvacuator
-from ramp.runtime.types import Plan
+from ramp.runtime.types import MergeContract, Plan
 from ramp.scheduler.arrival_time import minimum_arrival_time_at_on_ramp
 from ramp.scheduler.dp import dp_schedule
 from ramp.scheduler.dp_mixed import dp_mixed_schedule
@@ -199,6 +199,196 @@ def _try_dp_mixed_with_fallback(
         ), True
 
 
+_GAP_ALIGN_KP = 0.15
+_GAP_ALIGN_TARGET_GAP_M = 15.0
+_GAP_ALIGN_MIN_SPEED_MPS = 3.0
+
+
+def _compute_zone_c_speed_overrides(
+    *,
+    contracts: dict[str, MergeContract],
+    control_zone_state: dict[str, dict[str, float | str]],
+    zone_c_lane1_vehicles: list[tuple[str, float, float]] | None,
+    ramp_vmax_mps: float,
+) -> dict[str, float]:
+    """Compute gap-alignment speeds for ramp CAVs on main_h3_0.
+
+    For each ramp CAV with a contract, find the target predecessor on lane 1,
+    compute longitudinal gap error, and apply P-control + speed feedforward:
+        v_align = v_predecessor + k_p * (gap_actual - gap_target)
+    Clamped to [_GAP_ALIGN_MIN_SPEED_MPS, ramp_vmax_mps].
+
+    Only applies to CAVs currently on main_h3 lane 0 (the acceleration lane).
+    """
+    if not contracts or not zone_c_lane1_vehicles:
+        return {}
+
+    lane1_lookup: dict[str, tuple[float, float]] = {}
+    for vid, pos, spd in zone_c_lane1_vehicles:
+        lane1_lookup[vid] = (pos, spd)
+
+    overrides: dict[str, float] = {}
+    for veh_id, mc in contracts.items():
+        state = control_zone_state.get(veh_id)
+        if state is None:
+            continue
+        lane_id = str(state.get('lane_id', ''))
+        if not lane_id.startswith('main_h3_0'):
+            continue
+
+        cav_pos = float(state.get('lane_pos', 0.0))
+        cav_speed = float(state.get('speed', 0.0))
+
+        pred_id = mc.target_predecessor_id
+        if pred_id is not None and pred_id in lane1_lookup:
+            pred_pos, pred_speed = lane1_lookup[pred_id]
+            gap_actual = pred_pos - cav_pos
+            gap_error = gap_actual - _GAP_ALIGN_TARGET_GAP_M
+            v_align = pred_speed + _GAP_ALIGN_KP * gap_error
+        else:
+            v_align = cav_speed
+
+        overrides[veh_id] = max(
+            _GAP_ALIGN_MIN_SPEED_MPS,
+            min(v_align, ramp_vmax_mps),
+        )
+
+    return overrides
+
+
+_COOP_COMFORT_DECEL_MPS2 = 1.5
+_COOP_MIN_SPEED_MPS = 5.0
+_COOP_GAP_THRESHOLD_M = 20.0
+_COOP_DELTA_V_MPS = 1.0
+
+
+def _compute_zone_c_coop_overrides(
+    *,
+    contracts: dict[str, MergeContract],
+    control_zone_state: dict[str, dict[str, float | str]],
+    vehicle_types: dict[str, str],
+    zone_c_lane1_vehicles: list[tuple[str, float, float]] | None,
+    main_vmax_mps: float,
+) -> dict[str, float]:
+    """Compute cooperative speed adjustments for main-road CAVs near a merge gap.
+
+    When a contract's target follower is a CAV on lane 1 and the rear gap is
+    insufficient, gently reduce the follower's speed to widen the gap.
+    """
+    if not contracts or not zone_c_lane1_vehicles:
+        return {}
+
+    lane1_lookup: dict[str, tuple[float, float]] = {}
+    for vid, pos, spd in zone_c_lane1_vehicles:
+        lane1_lookup[vid] = (pos, spd)
+
+    overrides: dict[str, float] = {}
+    for _veh_id, mc in contracts.items():
+        ego_state = control_zone_state.get(mc.vehicle_id)
+        if ego_state is None:
+            continue
+        ego_lane_id = str(ego_state.get('lane_id', ''))
+        if not ego_lane_id.startswith('main_h3_0'):
+            continue
+        ego_pos = float(ego_state.get('lane_pos', 0.0))
+
+        foll_id = mc.target_follower_id
+        if foll_id is None:
+            continue
+        foll_type = vehicle_types.get(foll_id, 'hdv')
+        if foll_type != 'cav':
+            continue
+        if foll_id not in lane1_lookup:
+            continue
+
+        foll_pos, foll_speed = lane1_lookup[foll_id]
+        rear_gap = ego_pos - foll_pos
+        if rear_gap >= _COOP_GAP_THRESHOLD_M:
+            continue
+
+        coop_speed = max(
+            foll_speed - _COOP_DELTA_V_MPS,
+            _COOP_MIN_SPEED_MPS,
+        )
+        if foll_id in overrides:
+            overrides[foll_id] = min(overrides[foll_id], coop_speed)
+        else:
+            overrides[foll_id] = coop_speed
+
+    return overrides
+
+
+def _build_contracts(
+    *,
+    plan: Plan,
+    control_zone_state: dict[str, dict[str, float | str]],
+    vehicle_types: dict[str, str],
+    zone_c_lane1_vehicles: list[tuple[str, float, float]] | None,
+) -> dict[str, MergeContract]:
+    """Derive MergeContracts from the DP passing_order.
+
+    For each ramp CAV in the order, identify the vehicles immediately before
+    and after it in the merged sequence as its target predecessor and follower,
+    then validate against physical positions on lane 1.
+    """
+    order = plan.order
+    target_times = plan.target_cross_time_s
+    if not order:
+        return {}
+
+    lane1_pos_by_id: dict[str, float] = {}
+    if zone_c_lane1_vehicles:
+        for vid, pos, _spd in zone_c_lane1_vehicles:
+            lane1_pos_by_id[vid] = pos
+
+    contracts: dict[str, MergeContract] = {}
+    for rank, veh_id in enumerate(order):
+        state = control_zone_state.get(veh_id)
+        if state is None:
+            continue
+        if str(state.get('stream', '')) != 'ramp':
+            continue
+        raw_type = vehicle_types.get(veh_id, 'hdv')
+        if raw_type != 'cav':
+            continue
+
+        predecessor_id: str | None = None
+        follower_id: str | None = None
+        for j in range(rank - 1, -1, -1):
+            candidate = order[j]
+            if candidate in lane1_pos_by_id or str(control_zone_state.get(candidate, {}).get('stream', '')) == 'main':
+                predecessor_id = candidate
+                break
+        for j in range(rank + 1, len(order)):
+            candidate = order[j]
+            if candidate in lane1_pos_by_id or str(control_zone_state.get(candidate, {}).get('stream', '')) == 'main':
+                follower_id = candidate
+                break
+
+        target_time = target_times.get(veh_id)
+        if target_time is None:
+            continue
+
+        merge_window_half = 3.0
+        hdv_as_partner = (
+            (predecessor_id is not None and vehicle_types.get(predecessor_id, 'hdv') != 'cav')
+            or (follower_id is not None and vehicle_types.get(follower_id, 'hdv') != 'cav')
+        )
+
+        contracts[veh_id] = MergeContract(
+            vehicle_id=veh_id,
+            sequence_rank=rank,
+            target_predecessor_id=predecessor_id,
+            target_follower_id=follower_id,
+            merge_window_start_s=target_time - merge_window_half,
+            merge_window_end_s=target_time + merge_window_half,
+            expected_merge_time_s=target_time,
+            fallback_allowed=hdv_as_partner,
+        )
+
+    return contracts
+
+
 @dataclass
 class HierarchicalScheduler:
     delta_1_s: float
@@ -217,6 +407,9 @@ class HierarchicalScheduler:
     _last_zone_a_time_s: float | None = None
     zone_a_actions: dict[str, tuple[int, float]] = field(default_factory=dict)
     zone_c_actions: dict[str, tuple[int, float]] = field(default_factory=dict)
+    contracts: dict[str, MergeContract] = field(default_factory=dict)
+    zone_c_speed_overrides: dict[str, float] = field(default_factory=dict)
+    zone_c_coop_overrides: dict[str, float] = field(default_factory=dict)
     scheduler_fallback_count: int = 0
     scheduler_replan_count: int = 0
 
@@ -294,6 +487,31 @@ class HierarchicalScheduler:
             if self._cached_plan is not None and self._cached_plan.scheduler_fallback:
                 self.scheduler_fallback_count += 1
 
+        # --- Contract generation (runs on replan or when plan changes) ---
+        if self._cached_plan is not None and self.replanned_last_call:
+            self.contracts = _build_contracts(
+                plan=self._cached_plan,
+                control_zone_state=control_zone_state,
+                vehicle_types=vehicle_types,
+                zone_c_lane1_vehicles=zone_c_lane1_vehicles,
+            )
+        self._prune_stale_contracts(control_zone_state, crossed_merge)
+
+        # --- Zone C speed overrides (every step) ---
+        self.zone_c_speed_overrides = _compute_zone_c_speed_overrides(
+            contracts=self.contracts,
+            control_zone_state=control_zone_state,
+            zone_c_lane1_vehicles=zone_c_lane1_vehicles,
+            ramp_vmax_mps=self.ramp_vmax_mps,
+        )
+        self.zone_c_coop_overrides = _compute_zone_c_coop_overrides(
+            contracts=self.contracts,
+            control_zone_state=control_zone_state,
+            vehicle_types=vehicle_types,
+            zone_c_lane1_vehicles=zone_c_lane1_vehicles,
+            main_vmax_mps=self.main_vmax_mps,
+        )
+
         # --- Zone C: merge point management (every step) ---
         if self._merge_point_mgr is not None and zone_c_lane1_vehicles is not None:
             cav_states = _collect_zone_c_cav_states(
@@ -303,6 +521,7 @@ class HierarchicalScheduler:
                 sim_time_s=sim_time_s,
                 cav_states=cav_states,
                 lane1_vehicles=zone_c_lane1_vehicles,
+                contracts=self.contracts,
             )
             if self.zone_c_actions:
                 logger.info(
@@ -317,6 +536,19 @@ class HierarchicalScheduler:
             control_zone_state=control_zone_state,
             crossed_merge=crossed_merge,
         )
+
+    def _prune_stale_contracts(
+        self,
+        control_zone_state: dict[str, dict[str, float | str]],
+        crossed_merge: set[str],
+    ) -> None:
+        """Remove contracts for vehicles that have crossed merge or left the zone."""
+        stale = [
+            vid for vid in self.contracts
+            if vid in crossed_merge or vid not in control_zone_state
+        ]
+        for vid in stale:
+            del self.contracts[vid]
 
     def _project_cached_plan(
         self,

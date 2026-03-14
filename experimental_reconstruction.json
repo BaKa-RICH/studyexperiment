@@ -142,6 +142,12 @@
       "from": "Opus",
       "timestamp": "2026-03-13T10:16:14",
       "message": "采纳两位审阅者反馈:\n✓ P0 已修: _best_reject 改为 MergeEvalResult.reject_detail 正式字段\n✓ P1 已修: binding_constraint 显式处理 float(inf)\n✓ 已修: events.csv 同时输出 front+rear 完整字段\n△ 多 seed 回归留到 Todo 4.3 之后统一执行\n△ 速度自适应 t_lc_s 标记为未来优化方向\n164 tests PASS\n"
+    },
+    {
+      "type": "EXECUTION",
+      "from": "Opus",
+      "timestamp": "2026-03-14T12:41:29",
+      "message": "Strong A 快线 A1-A7 全部完成。 实现: MergeContract 驱动 Zone C, gap 对齐速度覆盖 (p75: 23.68→19.11), 主路 CAV 协同让隙, MPM 收窄为 contract 执行门控。 三 seed 验证: collision_count 均值 1.0, chain_complete 100%, fallback_rate 0.5% (从 ~33% 下降), contract_realization_rate 76.6%, merge_window_hit_rate 79.5%。 Strong A v1.0 冻结。已具备返回 Todo 4.3 条件。"
     }
   ]
 }

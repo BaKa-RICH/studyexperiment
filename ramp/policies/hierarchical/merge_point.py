@@ -16,6 +16,10 @@ import bisect
 import logging
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ramp.runtime.types import MergeContract
 
 logger = logging.getLogger(__name__)
 
@@ -239,6 +243,65 @@ def evaluate_merge_point(
     return MergeEvalResult(feasible=False, reject_detail=best_reject)
 
 
+def _evaluate_contract_gap(
+    cav_pos_m: float,
+    cav_speed_mps: float,
+    contract: MergeContract,
+    lane1_vehicles: list[tuple[str, float, float]],
+    params: MergePointParams,
+) -> MergeEvalResult:
+    """Evaluate only the gap specified by the contract's predecessor/follower.
+
+    Instead of forward-scanning all gaps, looks up the contract's target
+    predecessor and follower on lane 1 and evaluates that single gap.
+    Falls back to standard evaluate_merge_point if neither partner is found.
+    """
+    fallback_pos = params.lane0_length_m - params.fallback_buffer_m
+    merge_pos = cav_pos_m + cav_speed_mps * params.t_lc_s
+
+    if cav_pos_m >= fallback_pos:
+        return MergeEvalResult(
+            feasible=True,
+            merge_position_m=merge_pos,
+            is_fallback=True,
+        )
+
+    lane1_by_id: dict[str, tuple[str, float, float]] = {
+        v[0]: v for v in lane1_vehicles
+    }
+
+    lead: tuple[str, float, float] | None = None
+    follow: tuple[str, float, float] | None = None
+
+    if contract.target_predecessor_id is not None:
+        lead = lane1_by_id.get(contract.target_predecessor_id)
+    if contract.target_follower_id is not None:
+        follow = lane1_by_id.get(contract.target_follower_id)
+
+    if lead is None and follow is None:
+        return evaluate_merge_point(
+            cav_pos_m=cav_pos_m,
+            cav_speed_mps=cav_speed_mps,
+            lane1_vehicles=lane1_vehicles,
+            params=params,
+        )
+
+    detail = _evaluate_gap_detail(cav_pos_m, cav_speed_mps, lead, follow, params)
+    if detail.feasible:
+        return MergeEvalResult(
+            feasible=True,
+            merge_position_m=merge_pos,
+            gap_front_m=detail.g_f,
+            gap_rear_m=detail.g_r,
+            lead_id=detail.lead_id,
+            follow_id=detail.follow_id,
+            is_fallback=False,
+            safety_margin=detail.safety_margin,
+        )
+
+    return MergeEvalResult(feasible=False, reject_detail=detail)
+
+
 # ---------------------------------------------------------------------------
 # State-machine manager
 # ---------------------------------------------------------------------------
@@ -294,6 +357,7 @@ class MergePointManager:
         sim_time_s: float,
         cav_states: dict[str, VehicleState],
         lane1_vehicles: list[tuple[str, float, float]],
+        contracts: dict[str, MergeContract] | None = None,
     ) -> dict[str, tuple[int, float]]:
         """Run one step of the merge state machines for all tracked CAVs.
 
@@ -412,12 +476,22 @@ class MergePointManager:
 
             # Phase 3: SEARCHING -> evaluate gap -> potentially MERGING
             if tracker.state == MergeState.SEARCHING:
-                result = evaluate_merge_point(
-                    cav_pos_m=vs.lane_pos_m,
-                    cav_speed_mps=vs.speed_mps,
-                    lane1_vehicles=lane1_vehicles,
-                    params=self.params,
-                )
+                contract = contracts.get(veh_id) if contracts else None
+                if contract is not None:
+                    result = _evaluate_contract_gap(
+                        cav_pos_m=vs.lane_pos_m,
+                        cav_speed_mps=vs.speed_mps,
+                        contract=contract,
+                        lane1_vehicles=lane1_vehicles,
+                        params=self.params,
+                    )
+                else:
+                    result = evaluate_merge_point(
+                        cav_pos_m=vs.lane_pos_m,
+                        cav_speed_mps=vs.speed_mps,
+                        lane1_vehicles=lane1_vehicles,
+                        params=self.params,
+                    )
                 tracker.last_eval = result
                 if result.feasible:
                     tracker.state = MergeState.MERGING

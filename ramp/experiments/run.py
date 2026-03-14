@@ -678,9 +678,28 @@ def run_experiment(
                             aux_vmax_mps=aux_vmax_mps,
                             zone_a_actions=hier_scheduler.zone_a_actions,
                             zone_c_actions=hier_scheduler.zone_c_actions,
+                            zone_c_speed_overrides=hier_scheduler.zone_c_speed_overrides,
+                            zone_c_coop_overrides=hier_scheduler.zone_c_coop_overrides,
                         )
                         zone_a_action_ids = set(hier_scheduler.zone_a_actions)
                         zone_c_action_ids = set(hier_scheduler.zone_c_actions)
+                        if hier_scheduler.replanned_last_call and hier_scheduler.contracts:
+                            for cid, mc in sorted(hier_scheduler.contracts.items()):
+                                event_writer.writerow(
+                                    {
+                                        'time': sim_time,
+                                        'event': 'strong_a_contract',
+                                        'veh_id': mc.vehicle_id,
+                                        'detail': (
+                                            f'rank={mc.sequence_rank}'
+                                            f' pred={mc.target_predecessor_id}'
+                                            f' foll={mc.target_follower_id}'
+                                            f' window=[{mc.merge_window_start_s:.1f},{mc.merge_window_end_s:.1f}]'
+                                            f' phase={mc.merge_phase}'
+                                            f' fallback={mc.fallback_allowed}'
+                                        ),
+                                    }
+                                )
                     else:
                         command = build_dp_command(
                             sim_time_s=sim_time,

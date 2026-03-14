@@ -32,6 +32,8 @@ def build_command(
     aux_vmax_mps: float | None = None,
     zone_a_actions: dict[str, tuple[int, float]] | None = None,
     zone_c_actions: dict[str, tuple[int, float]] | None = None,
+    zone_c_speed_overrides: dict[str, float] | None = None,
+    zone_c_coop_overrides: dict[str, float] | None = None,
 ) -> ControlCommand:
     set_speed_mps: dict[str, float] = {}
     for veh_id in plan.order:
@@ -50,8 +52,16 @@ def build_command(
             stream, main_vmax_mps, ramp_vmax_mps,
             aux_vmax_mps=aux_vmax_mps, lane_id=lane_id,
         )
-        v_des = d_to_merge / time_to_target
+
+        if zone_c_speed_overrides and veh_id in zone_c_speed_overrides:
+            v_des = zone_c_speed_overrides[veh_id]
+        else:
+            v_des = d_to_merge / time_to_target
         set_speed_mps[veh_id] = max(0.0, min(v_des, stream_vmax))
+
+    if zone_c_coop_overrides:
+        for veh_id, coop_speed in zone_c_coop_overrides.items():
+            set_speed_mps[veh_id] = max(0.0, coop_speed)
 
     lane_change_targets: dict[str, tuple[int, float]] = {}
     if zone_a_actions:
