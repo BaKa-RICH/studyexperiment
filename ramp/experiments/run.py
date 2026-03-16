@@ -76,6 +76,21 @@ def _resolve_sumocfg(repo_root: Path, scenario: str) -> Path:
     return cfg
 
 
+def _resolve_gui_settings_file(
+    repo_root: Path,
+    gui_settings_file: str | None,
+) -> Path | None:
+    if gui_settings_file is not None and gui_settings_file.strip():
+        resolved = Path(gui_settings_file).expanduser().resolve()
+        if not resolved.exists():
+            raise FileNotFoundError(f'GUI settings file not found: {resolved}')
+        return resolved
+    default_settings = repo_root / 'ramp' / 'scenarios' / 'ramp_gui.view.xml'
+    if default_settings.exists():
+        return default_settings
+    return None
+
+
 def _timestamp() -> str:
     return time.strftime('%Y%m%d-%H%M%S', time.localtime())
 
@@ -178,6 +193,7 @@ def run_experiment(
     arrival_mode: str = 'uniform',
     use_profiles: bool = False,
     hdv_profile_weights: dict[str, float] | None = None,
+    gui_settings_file: str | None = None,
 ) -> int:
     if duration_s <= 0:
         raise ValueError('duration-s must be > 0')
@@ -208,6 +224,7 @@ def run_experiment(
     repo_root = Path(__file__).resolve().parents[2]
     sumocfg = _resolve_sumocfg(repo_root, scenario)
     sumo_binary = _pick_sumo_binary(gui)
+    resolved_gui_settings = _resolve_gui_settings_file(repo_root, gui_settings_file)
     out_path = Path(out_dir).resolve() if out_dir else _default_out_dir(repo_root, scenario, policy)
     if out_path.exists():
         shutil.rmtree(out_path)
@@ -267,6 +284,8 @@ def run_experiment(
         cmd += ['--route-files', str(generated_rou_path)]
     if seed is not None:
         cmd += ['--seed', str(seed)]
+    if gui and resolved_gui_settings is not None:
+        cmd += ['--gui-settings-file', str(resolved_gui_settings)]
 
     max_steps = int(round(duration_s / step_length))
 
@@ -1273,6 +1292,7 @@ def run_experiment(
         'use_profiles': use_profiles,
         'hdv_profile_weights': hdv_profile_weights,
         'baseline_role': 'diagnostic_only' if policy == 'no_control' else 'baseline',
+        'gui_settings_file': str(resolved_gui_settings) if resolved_gui_settings is not None else None,
         'output_dir': str(out_path),
     }
     if rou_meta is not None:
@@ -1378,6 +1398,12 @@ def main() -> int:
         default=os.environ.get('SUMO_GUI', '0') in {'1', 'true', 'True'},
         help='Use sumo-gui (default false; can be enabled with SUMO_GUI=1).',
     )
+    parser.add_argument(
+        '--gui-settings-file',
+        default=None,
+        help='Optional SUMO GUI settings file (*.view.xml). '
+             'If omitted and ramp/scenarios/ramp_gui.view.xml exists, it is used automatically.',
+    )
     args = parser.parse_args()
 
     return run_experiment(
@@ -1410,6 +1436,7 @@ def main() -> int:
         arrival_mode=args.arrival_mode,
         use_profiles=_resolve_use_profiles(args),
         hdv_profile_weights=_parse_cli_weights(args),
+        gui_settings_file=args.gui_settings_file,
     )
 
 

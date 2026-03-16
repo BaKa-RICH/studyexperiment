@@ -1,5 +1,5 @@
 <routes>
-  <vType id="cav" accel="2.6" decel="4.5" length="5.0" minGap="2.5" tau="1.0" maxSpeed="25" />
+  <vType id="cav" accel="2.6" decel="4.5" length="5.0" minGap="2.5" tau="1.0" maxSpeed="25" guiShape="passenger" />
 
   <route id="main_route" edges="main_h1 main_h2 main_h3 main_h4" />
   <route id="ramp_route" edges="ramp_h5 ramp_h3 main_h4" />

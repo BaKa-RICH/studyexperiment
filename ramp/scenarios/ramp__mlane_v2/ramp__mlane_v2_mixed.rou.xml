@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <routes>
-    <vType id="cav" accel="2.6" decel="4.5" length="5.0" minGap="2.5" tau="1.0" maxSpeed="25.0" sigma="0.0" speedDev="0.0" />
-    <vType id="hdv" accel="2.6" decel="4.5" length="5.0" minGap="2.5" tau="1.0" maxSpeed="25.0" sigma="0.5" speedDev="0.1" lcStrategic="1.0" />
+    <vType id="cav" accel="2.6" decel="4.5" length="5.0" minGap="2.5" tau="1.0" maxSpeed="25.0" sigma="0.0" speedDev="0.0" guiShape="passenger" />
+    <vType id="hdv" accel="2.6" decel="4.5" length="5.0" minGap="2.5" tau="1.0" maxSpeed="25.0" sigma="0.5" speedDev="0.1" lcStrategic="1.0" guiShape="passenger" />
     <route id="main_route" edges="main_h1 main_h2 main_h3 main_h4" />
     <route id="ramp_route" edges="ramp_h5 ramp_h6 main_h3 main_h4" />
     <vehicle id="main_L0_0" type="hdv" depart="0.00" route="main_route" departLane="0" departSpeed="max" />

@@ -148,6 +148,12 @@
       "from": "Opus",
       "timestamp": "2026-03-14T12:41:29",
       "message": "Strong A 快线 A1-A7 全部完成。 实现: MergeContract 驱动 Zone C, gap 对齐速度覆盖 (p75: 23.68→19.11), 主路 CAV 协同让隙, MPM 收窄为 contract 执行门控。 三 seed 验证: collision_count 均值 1.0, chain_complete 100%, fallback_rate 0.5% (从 ~33% 下降), contract_realization_rate 76.6%, merge_window_hit_rate 79.5%。 Strong A v1.0 冻结。已具备返回 Todo 4.3 条件。"
+    },
+    {
+      "agent": "Gemini",
+      "type": "REVIEW",
+      "time": "2026-03-14T12:49:49",
+      "content": "## [REVIEW] Strong A 后接 Todo 4.3 的实验风险评估\n\n**核心判断**：存在极高风险。极易将“锚点定义/门控宽容度差异”误判为“算法核心差异”。\n\n**结论**：\n1. **执行层掩盖策略差异**：Strong A 引入了强力的 Gap 对齐调速与协同让隙，这可能主导了实际合流位置。若执行层对 `expected_merge_position` 仅作软参考，Fixed 和 Flexible 的空间表现会被抹平。\n2. **归因谬误（门控时机 vs 算法）**：若 Fixed 严格死守固定空间锚点导致高 Fallback，而 Flexible 因滚动更新逃过一劫，这只是“空间宽容度/门控时机”的差异，极易被误当成算法本身的优劣。\n3. **协同机制的非对称收益**：Flexible 可能因其动态特性更易触发 Strong A 新增的“主路 CAV 协同让隙”，导致指标差异混入了协同机制的副作用，破坏单一变量原则。\n4. **契约语义的约束未对齐**：目前 `MergeContract` 中的位置/时间窗口，在 Fixed 和 Flexible 下是否受到 MPM 完全同等的硬性约束检验存疑。\n\n**最建议的处理方案**：\n**明确并隔离空间门控语义（Spatial Gating Isolation）**。在正式跑 Todo 4.3 之前：\n1. 检查 `MergePointManager`：确保 Fixed 和 Flexible 走**完全相同**的 Gap 安全评估与协同触发逻辑。\n2. 引入 `spatial_compliance_error` 指标：量化实际合流点与契约预期点的偏差。\n3. **剥离测试**：建议先在**关闭**“主路协同让隙”的退化版 Strong A 下跑一次 Fixed vs Flexible，确认纯空间策略差异；再开启协同，观察增量收益，防止机制耦合导致归因错误。"
     }
   ]
 }

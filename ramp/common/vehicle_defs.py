@@ -28,6 +28,7 @@ VEH_TYPE_HDV: str = "hdv"
 VTYPE_CAV: dict[str, str] = {
     "id": VEH_TYPE_CAV,
     "carFollowModel": "Krauss",
+    "guiShape": "passenger",
     "accel": "2.6",
     "decel": "4.5",
     "length": "5.0",
@@ -40,6 +41,7 @@ VTYPE_CAV: dict[str, str] = {
 
 _HDV_BASE: dict[str, str] = {
     "carFollowModel": "Krauss",
+    "guiShape": "passenger",
     "length": "5.0",
 }
 
@@ -90,6 +92,7 @@ VTYPE_HDV_HESITANT: dict[str, str] = {
 VTYPE_HDV: dict[str, str] = {
     "id": VEH_TYPE_HDV,
     "carFollowModel": "Krauss",
+    "guiShape": "passenger",
     "accel": "2.6", "decel": "4.5",
     "length": "5.0", "minGap": "2.5",
     "tau": "1.0", "maxSpeed": "25.0",
