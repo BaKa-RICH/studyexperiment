@@ -7,14 +7,14 @@ Backport: manual
 
 # T5: Metrics 与 Trace（Metrics, Trace, and Experiment Output Contract）
 
-> 最后更新：`2026-04-08T16:00:00+08:00`
+> 最后更新：`2026-04-08T18:45:00+08:00`
 
 ## 前置条件
 
 - `T1_tcg_and_snapshot`、`T2_merge_target_planner`、`T3_tcg_quintic_and_certificate`、`T4_execution_and_state_machine` 已完成。
 - 必读：`docs/design.md`（重点看 “验证策略”“A 层微场景”“状态机与 fail-safe”）。
 - 必读：`docs/contracts.md`（重点看 `ExperimentResultSummary`、`RollingPlanSlice`、`SafetyCertificate`）。
-- 必读：`docs/formulas.md`（重点看 `Δ_open`、coordination slice 推进条件和证书字段）。
+- 必读：`docs/formulas.md`（重点看 `e_pm^{virt}`、`e_ms^{virt}`、coordination slice 推进条件和证书字段）。
 - 必读：`docs/features/active_gap_v1/design.md`。
 
 ## 目标
@@ -23,7 +23,7 @@ Backport: manual
 
 ## Targets
 
-1. **trace 可解释**: trace 能区分 `merge slice` 与 `coordination slice`，并记录 `Δ_open`、速度错配和最紧证书约束。
+1. **trace 可解释**: trace 能区分 `merge slice` 与 `coordination slice`，并记录 pairwise virtual gap 误差、速度错配和最紧证书约束。
 2. **planned/actual 对齐**: 统计口径能解释滚动刷新 target 但执行仍按计划推进的情况。
 3. **输出契约统一**: per-run `trace.jsonl`、`summary.json` 与 `ExperimentResultSummary` 字段一致，可被 `T6` 直接消费。
 4. **实验外壳不越界**: `T5` 只负责产出和解释，不重写 planner / certificate / rollout 逻辑。
@@ -32,7 +32,7 @@ Backport: manual
 
 ### Step 1: 固定 trace schema（depends on Step 4 of T4）
 
-- [ ] trace 至少记录 `tcg_ids`、`slice_kind`、`replan_index`、`x_m_star`、`t_m_star`、`v_star`、`delta_open_before/after`、`binding_constraint`、`min_margin_*`。
+- [ ] trace 至少记录 `tcg_ids`、`slice_kind`、`replan_index`、`x_m_star`、`t_m_star`、`v_star`、`delta_open_before/after`、`virt_e_pm`、`virt_e_ms`、`pairwise_gap_ready`、`relative_speed_ready`、`binding_constraint`、`min_margin_*`。
 - [ ] trace 能明确区分 `merge` 与 `coordination` 两类 slice。
 - [ ] A0/A1 首版场景下，即使 `u/f` 缺省，trace 仍能稳定输出。
 
@@ -64,7 +64,7 @@ Backport: manual
 
 - `docs/design.md`: A0-A3 先于大车流，当前 tick 无 merge 解时先 coordination
 - `docs/contracts.md`: `ExperimentResultSummary`、slice 类型和证书字段
-- `docs/formulas.md`: `Δ_open`、推进条件和证书最小裕度
+- `docs/formulas.md`: pairwise virtual gap、推进条件和证书最小裕度
 
 **Feature Package:**
 
@@ -159,7 +159,7 @@ tests/active_gap_v1/test_metrics_and_trace.py
 
 ### 1. 固定 trace 字段
 
-- 为每个 tick 记录 `tcg_ids`、`slice_kind`、`delta_open_before/after`、`speed_alignment_before/after`、`binding_constraint`、`min_margin_*`。
+- 为每个 tick 记录 `tcg_ids`、`slice_kind`、`delta_open_before/after`、`speed_alignment_before/after`、`virt_e_pm`、`virt_e_ms`、`pairwise_gap_ready`、`relative_speed_ready`、`binding_constraint`、`min_margin_*`。
 - 明确 `u/f` 缺省时相关字段如何写 `null / None`，不要临时删字段。
 
 ### 2. 定义 `planned / actual`
@@ -190,7 +190,7 @@ tests/active_gap_v1/test_metrics_and_trace.py
 
 - `pytest tests/active_gap_v1/test_metrics_and_trace.py` 通过。
 - trace 能区分 `merge` 与 `coordination` 两类 slice。
-- 能记录 `Δ_open` 的变化。
+- 能记录 `virt_e_pm / virt_e_ms` 与 `Δ_open` 聚合诊断的变化。
 - 能解释为什么某次 tick 没 merge 但仍然是“有效推进”。
 
 ### 组装验证（产出运行时依赖的 task，可选）

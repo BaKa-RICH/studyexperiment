@@ -13,7 +13,7 @@ Backport: manual
 >
 > 公式推导与定义理由见 `docs/derivations.md`。
 >
-> 最后更新：`2026-04-08T16:00:00+08:00`
+> 最后更新：`2026-04-08T18:32:00+08:00`
 
 ## 1. 使用原则
 
@@ -159,6 +159,90 @@ R(v^*)=d_{pm}^*(v^*)+d_{ms}^*(v^*)
 \]
 
 当 `\Delta_open > 0` 时，说明算法不是在“等现成 gap”，而是在通过 `p/m/s` 协同把未来 gap 做出来。
+
+### 5.3 coordination 的历史聚合代理与当前 pairwise virtual gap
+
+在第一版闭环里，coordination 曾使用一个聚合版代理：
+
+\[
+\Delta_{open}^{agg}(t_k)
+=
+\max\left(
+0,\
+D_{pm}(v_{ref}^k)+D_{ms}(v_{ref}^k)-(x_p(t_k)-x_s(t_k))
+\right)
+\]
+
+其中：
+
+\[
+v_{ref}^k=\frac{v_p(t_k)+v_m(t_k)+v_s(t_k)}{3}
+\]
+
+这个代理适合第一版数值闭环，但它有一个已知局限：
+
+- 它只能回答“总 gap 是否还不够”
+- 不能区分“不够的是 `p-m` 一侧”还是“不够的是 `m-s` 一侧”
+
+为了与 2023 分层 / 时变 headway 思路对齐，当前版本已经将 coordination 目标显式拆成两侧虚拟 gap 误差。
+
+定义 merge 进度变量（建议冻结为按期望 merge 位置归一化的位置进度）：
+
+\[
+\xi_k
+=
+\mathrm{clip}\!\left(
+\frac{x_m(t_k)-x_m(t_0)}
+{x_m^{exp}-x_m(t_0)+\varepsilon_x},
+0,1
+\right)
+\]
+
+定义时变虚拟头距：
+
+\[
+h_{pm}^{virt}(\xi_k)=\xi_k h_{pr}
+\]
+
+\[
+h_{ms}^{virt}(\xi_k)=\xi_k h_{rf}
+\]
+
+定义时变虚拟距离：
+
+\[
+D_{pm}^{virt}(\xi_k,v_m)
+=
+L+s_0+h_{pm}^{virt}(\xi_k)v_m
+\]
+
+\[
+D_{ms}^{virt}(\xi_k,v_s)
+=
+L+s_0+h_{ms}^{virt}(\xi_k)v_s
+\]
+
+定义两侧虚拟 gap 误差：
+
+\[
+e_{pm}^{virt}(t_k)
+=
+\max\left(0,\ D_{pm}^{virt}(\xi_k,v_m(t_k))-(x_p(t_k)-x_m(t_k))\right)
+\]
+
+\[
+e_{ms}^{virt}(t_k)
+=
+\max\left(0,\ D_{ms}^{virt}(\xi_k,v_s(t_k))-(x_m(t_k)-x_s(t_k))\right)
+\]
+
+当前 coordination 控制器优先驱动：
+
+\[
+e_{pm}^{virt}\to 0,\qquad e_{ms}^{virt}\to 0
+\]
+
+其中 `\Delta_{open}^{agg}` 仍可保留为兼容旧实验的辅助诊断量，但不再是主控制目标。
 
 ## 6. merge branch：上层可行域与字典序目标
 
@@ -403,9 +487,15 @@ c_{i,5}
 在当前 tick 无 certified merge slice 时，允许搜索 **coordination slice**。  
 coordination slice 的目标不是“立即完成合流”，而是：
 
-- 继续减小 `\Delta_open`
+- 继续减小 `e_{pm}^{virt}`
+- 继续减小 `e_{ms}^{virt}`
 - 继续减小三车速度错配
 - 同时保持顺序与整段安全
+
+说明：
+
+- 当前实现已按两侧虚拟 gap 分开驱动 coordination
+- `\Delta_{open}^{agg}` 可继续作为兼容旧 trace 的辅助统计，但不再承担主控制律角色
 
 定义当前速度错配指标：
 
@@ -423,7 +513,13 @@ coordination slice 的目标不是“立即完成合流”，而是：
 coordination slice 被认为“有效推进”，至少满足：
 
 \[
-\Delta_{open}^{k+1} < \Delta_{open}^{k}
+e_{pm}^{virt,k+1} < e_{pm}^{virt,k}
+\]
+
+或
+
+\[
+e_{ms}^{virt,k+1} < e_{ms}^{virt,k}
 \]
 
 或
@@ -436,7 +532,13 @@ coordination slice 被认为“有效推进”，至少满足：
 
 - 相对顺序不变
 - 动力学约束成立
-- `SafetyCertificate` 成立
+- 当前实现下的 coordination 证书成立
+
+若仍采用第一版聚合代理，可把推进判据近似退化为：
+
+\[
+\Delta_{open}^{agg,k+1} < \Delta_{open}^{agg,k}
+\]
 
 因此，当前 tick 的控制优先级变成：
 
@@ -548,9 +650,16 @@ g_{sf}(\tau)=x_s(\tau)-\hat x_f(\tau)-D_{sf}(v_f(\tau))
 - `g_{pm}` 与 `g_{ms}` 至少在 `[\tau_{lc}^*, H]` 上检查
 - `g_{up}` 与 `g_{sf}` 在整个 horizon 上检查
 
-对于 coordination slice：
+对于 coordination slice（当前实现）：
 
-- 四个安全函数都在 `[\tau_{min}, \tau_{max}] = [0, \Delta t_{exec}]` 上检查
+- 动力学约束在 `[\tau_{min}, \tau_{max}] = [0, \Delta t_{exec}]` 上检查
+- `g_{pm}` 与 `g_{ms}` 不再作为跨车道硬安全证书；它们转入 §5.3 的 virtual gap 误差语义
+
+对于 coordination slice（后续优化方向）：
+
+- `g_{pm}` 与 `g_{ms}` 继续不作为当前跨车道硬证书
+- 若 `u/f` 被显式建模并参与边界验证，则 `g_{up}` 与 `g_{sf}` 可继续作为边界硬约束
+- merge 触发前应同时要求 pairwise virtual gap 与 relative speed 都进入阈值
 
 并入后短时保护可选增加：
 

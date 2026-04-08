@@ -20,6 +20,7 @@ from active_gap_v1.state_machine import validate_transition, check_tcg_validity,
 from active_gap_v1.executor import (
     commit_first_slice, decide_execution, rollout_step,
     synthesize_coordination_slice, _try_certified_merge,
+    _coordination_metrics_from_states, _coordination_reference,
     N_COORD_MAX, EPS_PROGRESS,
 )
 
@@ -34,7 +35,7 @@ def _a0_world_wide_gap(v0: float = 16.7) -> dict[str, VehicleState]:
     """Layout where p-s gap is already large enough for merge gate to pass."""
     def vs(vid: str, stream: str, x: float) -> VehicleState:
         return VehicleState(vid, stream, f"{stream}_0", x, v0, 0.0, 5.0, True, ExecutionState.PLANNING)
-    return {"p": vs("p", "mainline", 55.0), "m": vs("m", "ramp", 30.0), "s": vs("s", "mainline", 10.0)}
+    return {"p": vs("p", "mainline", 80.0), "m": vs("m", "ramp", 45.0), "s": vs("s", "mainline", 0.0)}
 
 
 def _snap_and_tcg(mode: AnchorMode = AnchorMode.FLEXIBLE, wide_gap: bool = False):
@@ -75,15 +76,56 @@ def test_merge_branch_iterates_candidates():
     assert result is not None, "A0 flexible should find a certified merge target"
     target, profiles, cert = result
     assert cert.failure_kind is None
-    assert target.delta_open_m > 0
+    assert target.delta_open_m >= 0.0
+
+
+def test_merge_branch_blocks_initial_pairwise_unready_state():
+    snap, tcg = _snap_and_tcg()
+    result = _try_certified_merge(snap, tcg)
+    assert result is None
 
 
 def test_coordination_slice_basic():
     snap, tcg = _snap_and_tcg()
     coord = synthesize_coordination_slice(snapshot=snap, tcg=tcg)
-    if coord is not None:
-        assert coord.slice_kind == SliceKind.COORDINATION
-        assert coord.certificate.failure_kind is None
+    assert coord is not None
+    assert coord.slice_kind == SliceKind.COORDINATION
+    assert coord.certificate.failure_kind is None
+
+
+def test_coordination_reduces_pairwise_virtual_gap_error():
+    snap, tcg = _snap_and_tcg()
+    coord = synthesize_coordination_slice(snapshot=snap, tcg=tcg)
+    assert coord is not None
+
+    x_m_expected, v_ref = _coordination_reference(snapshot=snap, tcg=tcg)
+    before = _coordination_metrics_from_states(
+        scenario=snap.scenario,
+        p_x=snap.control_zone_states["p"].x_pos_m,
+        p_v=snap.control_zone_states["p"].speed_mps,
+        m_x=snap.control_zone_states["m"].x_pos_m,
+        m_v=snap.control_zone_states["m"].speed_mps,
+        s_x=snap.control_zone_states["s"].x_pos_m,
+        s_v=snap.control_zone_states["s"].speed_mps,
+        x_m_expected=x_m_expected,
+        v_ref=v_ref,
+    )
+    after = _coordination_metrics_from_states(
+        scenario=snap.scenario,
+        p_x=coord.profile_p.terminal_state.x_m,
+        p_v=coord.profile_p.terminal_state.v_mps,
+        m_x=coord.profile_m.terminal_state.x_m,
+        m_v=coord.profile_m.terminal_state.v_mps,
+        s_x=coord.profile_s.terminal_state.x_m,
+        s_v=coord.profile_s.terminal_state.v_mps,
+        x_m_expected=x_m_expected,
+        v_ref=v_ref,
+        xi_override=float(before["xi"]),
+    )
+    assert (
+        after["e_pm_virt"] < before["e_pm_virt"] - EPS_PROGRESS
+        or after["e_ms_virt"] < before["e_ms_virt"] - EPS_PROGRESS
+    )
 
 
 def test_decide_execution_merge_found():

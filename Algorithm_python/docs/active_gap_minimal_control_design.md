@@ -5,7 +5,7 @@ Scope: repo-instance
 
 # 主动造 Gap 最小控制方案设计稿
 
-> 最后更新：`2026-04-08T00:04:03+08:00`
+> 最后更新：`2026-04-08T18:32:00+08:00`
 >
 > 本稿是独立设计稿，不替代当前正式 SSOT；目的只有一个：把当前已经拍板的 `TCG / coordination slice / A层只看pms` 版本完整讲清楚，作为后续继续扩展文档与实现时的总草案。
 
@@ -799,7 +799,9 @@ x_i^+(\tau)=x_i(H)+v_i(H)(\tau-H)
 
 对 coordination slice：
 
-- 四个安全函数都在 `[\tau_{\min}, \tau_{\max}] = [0,\Delta t_{\mathrm{exec}}]` 上检查
+- 当前最小实现中，硬检查收缩为 `[\tau_{\min}, \tau_{\max}] = [0,\Delta t_{\mathrm{exec}}]` 上的动力学约束
+- `g_{pm}` 与 `g_{ms}` 在 coordination 阶段不再直接作为跨车道硬证书，而是应解释为 virtual gap / pairwise error
+- 详细口径以 `docs/formulas.md` 与 `docs/active_gap_literature_alignment_and_optimization.md` 为准
 
 ### 10.4 有限点精确验证
 

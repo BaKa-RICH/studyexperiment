@@ -9,7 +9,7 @@ Backport: manual
 
 > **所有开发 agent 必读此文档。** 本文档是跨模块共享类型、模块边界、字段锁定规则与运行时协议的权威定义。
 >
-> 最后更新：`2026-04-08T16:00:00+08:00`
+> 最后更新：`2026-04-08T18:45:00+08:00`
 >
 > 当前契约已经升级为：`TCG` 三车协同组、`p/m/s` 三车受控、`u/f` 可选边界预测、以及 `merge slice / coordination slice / safe_wait / fail_safe_stop` 四分支执行语义。
 
@@ -250,6 +250,21 @@ class ExperimentResultSummary:
     planned_actual_time_error_p95_s: float | None = None
     planned_actual_position_error_p95_m: float | None = None
 ```
+
+字段语义补充：
+
+- `RollingPlanSlice.delta_open_before_m / delta_open_after_m`
+  - 当前版本中，表示 coordination 阶段的**聚合 virtual gap 误差**
+  - 具体实现口径为 `e_pm^{virt} + e_ms^{virt}`
+  - 它不再表示“原始 `p-s` 总 gap 距离差”
+- `RollingPlanSlice.speed_alignment_before_mps / speed_alignment_after_mps`
+  - 当前版本中，表示 pairwise 相对速度偏差总和
+  - 具体实现口径为 `|v_p-v_m| + |v_m-v_s|`
+- per-tick trace 若需要解释 coordination 收敛过程，除上述聚合字段外，建议额外记录：
+  - `virt_e_pm`
+  - `virt_e_ms`
+  - `pairwise_gap_ready`
+  - `relative_speed_ready`
 
 ## 4. Producer / Consumer 约定
 

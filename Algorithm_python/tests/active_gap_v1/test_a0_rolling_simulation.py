@@ -15,7 +15,7 @@ from active_gap_v1.tcg_selector import identify_tcg
 from active_gap_v1.executor import (
     _try_certified_merge, synthesize_coordination_slice,
     commit_first_slice, decide_execution, rollout_step,
-    N_COORD_MAX,
+    N_COORD_MAX, _coordination_metrics_from_states, _coordination_reference,
 )
 
 
@@ -90,13 +90,33 @@ def run_a0_rolling_simulation(max_ticks: int = 200, verbose: bool = False):
         s_st = world["s"]
         gap_ps = p_st.x_pos_m - s_st.x_pos_m
         gap_pm = p_st.x_pos_m - m_st.x_pos_m
+        gap_ms = m_st.x_pos_m - s_st.x_pos_m
+        x_m_expected, v_ref = _coordination_reference(snapshot=snap, tcg=tcg)
+        coord_metrics = _coordination_metrics_from_states(
+            scenario=cfg,
+            p_x=p_st.x_pos_m,
+            p_v=p_st.speed_mps,
+            m_x=m_st.x_pos_m,
+            m_v=m_st.speed_mps,
+            s_x=s_st.x_pos_m,
+            s_v=s_st.speed_mps,
+            x_m_expected=x_m_expected,
+            v_ref=v_ref,
+        )
 
         tick_data = {
             "tick": tick, "time_s": sim_time,
             "decision": decision_tag,
             "p_x": p_st.x_pos_m, "m_x": m_st.x_pos_m, "s_x": s_st.x_pos_m,
             "p_v": p_st.speed_mps, "m_v": m_st.speed_mps, "s_v": s_st.speed_mps,
-            "gap_ps": gap_ps, "gap_pm": gap_pm,
+            "gap_ps": gap_ps, "gap_pm": gap_pm, "gap_ms": gap_ms,
+            "virt_e_pm": coord_metrics["e_pm_virt"],
+            "virt_e_ms": coord_metrics["e_ms_virt"],
+            "coord_xi": coord_metrics["xi"],
+            "pairwise_gap_ready": coord_metrics["pairwise_gap_ready"],
+            "relative_speed_ready": coord_metrics["relative_speed_ready"],
+            "x_m_expected": x_m_expected,
+            "v_ref": v_ref,
         }
         trace.append(tick_data)
 

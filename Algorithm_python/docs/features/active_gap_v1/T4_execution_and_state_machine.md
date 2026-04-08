@@ -7,7 +7,7 @@ Backport: manual
 
 # T4: Execution 与状态机（Execution, Coordination Branch, and State Machine）
 
-> 最后更新：`2026-04-08T17:00:00+08:00`
+> 最后更新：`2026-04-08T18:45:00+08:00`
 
 ## 前置条件
 
@@ -43,10 +43,14 @@ Backport: manual
 
 - [ ] 先遍历 `MergeTarget` 列表尝试 certified merge slice（遇到第一个证书通过的就提交，不要只试 rank #1）。
 - [ ] merge 全部失败后才尝试 certified coordination slice。
-- [ ] coordination slice 只有在能降低 `Δ_open` 或速度错配且证书通过时才可提交。
+- [ ] coordination slice 只有在能降低 `e_pm^{virt}`、`e_ms^{virt}` 或速度错配且证书通过时才可提交。
 - [ ] coordination 连续 tick 上限：同一 `TCG` 下连续 coordination slice 不超过 `N_coord_max = 50` 个 tick（即 5.0s）。超过后强制进入 `SAFE_WAIT`。
-- [ ] coordination 最小改善阈值：`Δ_open` 或 `Δ_v` 至少下降 `ε_progress = 0.01`，否则视为无效推进，进入 `SAFE_WAIT`。
+- [ ] coordination 最小改善阈值：`e_pm^{virt}`、`e_ms^{virt}` 或 `Δ_v` 至少有一项下降 `ε_progress = 0.01`，否则视为无效推进，进入 `SAFE_WAIT`。
 - [ ] 当前 tick 无 merge 解时，不会直接跳到 `SAFE_WAIT`。
+- [ ] merge readiness 与 hard certificate 分层：
+  - readiness 至少显式检查 pairwise virtual gap readiness
+  - readiness 至少显式检查 relative-speed readiness
+  - 真正 commit merge 仍以 `build_safety_certificate()` 的 hard certificate 为准
 
 ### Step 3: 实现等待与 fail-safe 分支（depends on Step 2）
 
@@ -197,11 +201,20 @@ tests/active_gap_v1/test_execution_and_state_machine.py
 ### 3. 实现 coordination branch
 
 - merge branch 全部候选都无解时，再尝试 coordination branch。
-- coordination slice 必须能证明：当前 tick 虽不能 merge，但在继续减小 `Δ_open` 或速度错配。
+- coordination slice 必须能证明：当前 tick 虽不能 merge，但在继续减小 `e_pm^{virt}`、`e_ms^{virt}` 或速度错配。
+- `g_pm / g_ms` 在 coordination 阶段不再直接当作跨车道硬证书；它们应通过 pairwise virtual gap 误差语义驱动控制。
 - 收敛保证：
   - 同一 `TCG` 下连续 coordination slice 不超过 `N_coord_max = 50` tick（5.0s）。
-  - `Δ_open` 或 `Δ_v` 每 tick 至少下降 `ε_progress = 0.01`，否则视为无效推进。
+  - `e_pm^{virt}`、`e_ms^{virt}` 或 `Δ_v` 每 tick 至少有一项下降 `ε_progress = 0.01`，否则视为无效推进。
   - 超出上限或无效推进时，终止 coordination，进入 `SAFE_WAIT`。
+
+### 3.1 merge readiness 与证书分层
+
+- readiness 是“是否值得进入 merge branch 的显式门槛”，不是 merge 证书本身。
+- 当前推荐最小门槛：
+  - pairwise virtual gap readiness
+  - relative-speed readiness
+- readiness 通过后，仍需对枚举出的 `MergeTarget` 求三车轨迹并跑 hard certificate。
 
 ### 4. 明确等待与降级分支
 

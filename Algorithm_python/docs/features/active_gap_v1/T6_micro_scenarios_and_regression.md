@@ -7,13 +7,13 @@ Backport: manual
 
 # T6: A 层微场景与回归门禁（A-Layer Micro-Scenarios and Regression Gate）
 
-> 最后更新：`2026-04-08T16:00:00+08:00`
+> 最后更新：`2026-04-08T18:45:00+08:00`
 
 ## 前置条件
 
 - `T1_tcg_and_snapshot`、`T2_merge_target_planner`、`T3_tcg_quintic_and_certificate`、`T4_execution_and_state_machine`、`T5_metrics_and_trace` 已完成。
 - 必读：`docs/design.md`（重点看 “A 层微场景”“验证层次”“当前 tick 算不出 merge 时怎么办”）。
-- 必读：`docs/formulas.md`（重点看 `Δ_open`、coordination slice 推进条件、四条证书函数）。
+- 必读：`docs/formulas.md`（重点看 `e_{pm}^{virt}`、`e_{ms}^{virt}`、coordination slice 推进条件、四条证书函数）。
 - 必读：`docs/features/active_gap_v1/design.md` 与 `README.md`。
 
 ## 目标
@@ -53,7 +53,7 @@ Backport: manual
 
 - `/home/liangyunxuan/src/Sumo-Carla-simulation-for-Vehicle-Road-Cloud-Integeration/Algorithm_python` — 当前主算法 A 层验证与回归门禁目录
 - `docs/design.md` — A0-A1 的首版验证地位与 A2/A3 扩展前置条件
-  - `docs/formulas.md` — `Δ_open`、coordination slice 推进条件、主安全函数
+  - `docs/formulas.md` — pairwise virtual gap、coordination slice 推进条件、主安全函数
   - `experiments/active_gap_v1/` — `T5` 产出的实验外壳与结果契约
 
 ### Docs:
@@ -61,7 +61,7 @@ Backport: manual
 **Formal Specs:**
 
 - `docs/design.md`: A0-A1 先于大车流、A 层首版只看 `p/m/s`
-- `docs/formulas.md`: `Δ_open` 与证书最小裕度解释
+- `docs/formulas.md`: pairwise virtual gap 与证书最小裕度解释
 
 **Feature Package:**
 
@@ -98,7 +98,7 @@ Backport: manual
 
 ### Open URL
 
-用于核对正式文档中的 A0-A1 首版目标、`Δ_open` 解释和 fail-safe 口径。
+用于核对正式文档中的 A0-A1 首版目标、pairwise virtual gap 解释和 fail-safe 口径。
 
 ### Code Exploration
 
@@ -161,7 +161,7 @@ tests/active_gap_v1/test_micro_scenarios_and_regression.py
 
 ### 2. 固定 blocking gate
 
-- `A0`：必须出现正的 `Δ_open`，且至少存在 1 个 `slice_kind=coordination` 的 committed slice 或 `p/s` 的轨迹偏离自由运动预测（`Δ_coop > 0`），且最终能形成认证的主动造 gap 过程。
+- `A0`：必须出现正的 pairwise virtual gap 误差（`virt_e_pm > 0` 或 `virt_e_ms > 0`），且至少存在 1 个 `slice_kind=coordination` 的 committed slice 或 `p/s` 的轨迹偏离自由运动预测（`Δ_coop > 0`），且最终能形成认证的主动造 gap 过程。
 - `A1`：必须能直接比较 `fixed/flexible` 的 target 与结果差异。
 - `A2/A3`：不进入首版 blocking gate，仅保留扩展准入条件记录。
 
