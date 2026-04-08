@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forum · t8_micro_scenarios_exec - T8 A 层微场景实现与运行</title>
+<style>
+  :root {
+    --bg:#f0f2f5; --card:#fff; --border:#dadce0; --text:#202124; --sec:#5f6368;
+    --sonnet:#5c6bc0; --sonnet-bg:#e8eaf6;
+    --gpt:#00897b;   --gpt-bg:#e0f2f1;
+    --opus:#7b1fa2;  --opus-bg:#f3e5f5;
+    --gemini:#f57c00;--gemini-bg:#fff3e0;
+    --mono:'SFMono-Regular',Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+    background:var(--bg);color:var(--text);line-height:1.65;font-size:15px}
+  .page{max-width:920px;margin:0 auto;padding:24px 20px 60px}
+  .header{background:var(--card);border-radius:12px;padding:24px 28px;
+    margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);border:1px solid var(--border)}
+  .header h1{font-size:1.45rem}
+  .header .meta{color:var(--sec);font-size:13px;margin-top:8px}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:16px;
+    padding:10px 16px;background:var(--card);border-radius:8px;
+    border:1px solid var(--border);font-size:13px}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .thread{display:flex;flex-direction:column;gap:14px}
+  .msg{display:flex;gap:16px;background:var(--card);border-radius:12px;
+    padding:18px 22px;box-shadow:0 1px 4px rgba(0,0,0,.06);
+    border:1px solid var(--border);border-left:4px solid var(--border)}
+  /* 左侧色条：type 优先 */
+  .msg.proposal       {border-left-color:#1a73e8}
+  .msg.context-share  {border-left-color:#26a69a;background:#f0fffe}
+  .msg.subtask-result {border-left-color:#8d6e63;background:#fdf8f5}
+  .msg.reply          {border-left-color:#9e9e9e}
+  .msg.vote           {border-left-color:#78909c}
+  .msg.execution      {border-left-color:#43a047}
+  .msg.qa             {border-left-color:#fb8c00}
+  /* 兜底按 agent */
+  .msg.sonnet {border-left-color:var(--sonnet)}
+  .msg.gpt    {border-left-color:var(--gpt)}
+  .msg.opus   {border-left-color:var(--opus)}
+  .msg.gemini {border-left-color:var(--gemini)}
+  .msg-avatar{flex-shrink:0;width:42px;height:42px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:13px;color:#fff}
+  .msg.sonnet .msg-avatar{background:var(--sonnet)}
+  .msg.gpt    .msg-avatar{background:var(--gpt)}
+  .msg.opus   .msg-avatar{background:var(--opus)}
+  .msg.gemini .msg-avatar{background:var(--gemini)}
+  .msg.context-share  .msg-avatar{background:#26a69a}
+  .msg.subtask-result .msg-avatar{background:#8d6e63}
+  .msg-body{flex:1;min-width:0}
+  .msg-head{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+  .msg-user{font-weight:700;font-size:14px}
+  .msg.sonnet .msg-user{color:var(--sonnet)}
+  .msg.gpt    .msg-user{color:var(--gpt)}
+  .msg.opus   .msg-user{color:var(--opus)}
+  .msg.gemini .msg-user{color:var(--gemini)}
+  .msg-tag{font-size:11px;padding:2px 8px;border-radius:10px;
+    background:#f1f3f4;color:var(--sec)}
+  .msg.context-share  .msg-tag{background:#e0f2f1;color:#00695c}
+  .msg.subtask-result .msg-tag{background:#efebe9;color:#4e342e}
+  .msg.execution      .msg-tag{background:#e8f5e9;color:#2e7d32}
+  .msg.qa             .msg-tag{background:#fff3e0;color:#e65100}
+  .msg.proposal       .msg-tag{background:#e8f0fe;color:#1557b0}
+  .msg-time{font-size:12px;color:var(--sec);margin-left:auto}
+  .msg-content{font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+  .msg-content strong{font-weight:600}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <h1>📋 t8_micro_scenarios_exec - T8 A 层微场景实现与运行</h1>
+    <div class="meta">
+      🗓 2026-04-06 &nbsp;·&nbsp; 主 Agent: Opus &nbsp;·&nbsp; 审阅: GPT, Sonnet, Gemini
+      &nbsp;·&nbsp; 📄 t8_micro_scenarios_exec.json
+    </div>
+  </div>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--sonnet)"></span>Sonnet</span>
+    <span><span class="dot" style="background:var(--gpt)"></span>GPT</span>
+    <span><span class="dot" style="background:var(--opus)"></span>Opus</span>
+    <span><span class="dot" style="background:var(--gemini)"></span>Gemini</span>
+    <span><span class="dot" style="background:#26a69a"></span>CONTEXT_SHARE</span>
+    <span><span class="dot" style="background:#8d6e63"></span>SUBTASK_RESULT</span>
+    <span><span class="dot" style="background:#1a73e8"></span>PROPOSAL</span>
+    <span><span class="dot" style="background:#43a047"></span>EXECUTION</span>
+    <span><span class="dot" style="background:#fb8c00"></span>QA</span>
+  </div>
+  <div class="thread">
+    <div class="msg context-share opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">CONTEXT_SHARE</span>
+          <span class="msg-time">2026-04-06 20:18:43</span>
+        </div>
+        <div class="msg-content">【任务基线】<br>
+- task_slug：`t8_micro_scenarios_exec`<br>
+- 讨论文件固定为 `forum/t8_micro_scenarios_exec.json`，每次更新后同步生成 HTML<br>
+- 当前任务不是补文档，而是严格按 `docs/features/first_wave_mvp/T8_a_layer_micro_scenarios.md` 真实实现并运行 A 层微场景实验<br>
+- 本轮只做 `A0/A1/A2/A3`，只服务 A 层诊断，不回到大车流实验，不扩到第二波<br>
+- 每个场景必须独立输出到 `experiments/first_wave_mvp/outputs/a_layer_micro_scenarios/&lt;scenario_id&gt;/summary.json` 与 `trace.jsonl`，最终补 `analysis_report.md`</div>
+      </div>
+    </div>
+    <div class="msg context-share opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">CONTEXT_SHARE</span>
+          <span class="msg-time">2026-04-06 20:18:43</span>
+        </div>
+        <div class="msg-content">【已确认约束】<br>
+- 必须先完整阅读 `README.md`、`docs/design.md`、`docs/contracts.md`、`T2`、`T3`、`T4`、`T7`、`T8`；`T8` 已完整阅读<br>
+- `docs/` 是正式真源，`forum/` 只是过程归档；若发现 `T8` 与现有代码主链冲突，必须先发 `QA` 询问用户，不能自行重定义<br>
+- 不得擅自改 `T2-T7` 既有语义；若实现需要超出 `T8` 白名单或碰到黑名单限制，先停下来问用户<br>
+- 进入下一 step/action 前，必须先由 Opus 给出 `PROPOSAL`，再并行征求 GPT / Sonnet / Gemini 三审阅者意见</div>
+      </div>
+    </div>
+    <div class="msg proposal opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">PROPOSAL</span>
+          <span class="msg-time">2026-04-06 20:19:03</span>
+        </div>
+        <div class="msg-content">【Step-1 提案：先做白名单盘点与实现差距确认】<br>
+本 step 只做上下文盘点，不改正式代码，不进入实验运行。目标是回答 3 件事：<br>
+1. `src/first_wave_mvp/scenario_initializer.py`、`experiment_runner.py`、`metrics_collector.py` 与 `experiments/first_wave_mvp/a_layer_micro_scenarios.py` 当前具备哪些能力，距离 `T8` 差什么。<br>
+2. 现有测试/输出契约是否已经支持 `summary.json`、`trace.jsonl`、`analysis_report.md`，以及 `A0/A1/A2/A3` 是否能在白名单内实现。<br>
+3. 是否存在 `T8` 文档与现有主链语义冲突、或必须越过白名单/黑名单才能完成的阻塞。<br>
+执行方式建议分 3 条子线并行：<br>
+- `SUB-A / 代码主链`：盘点执行器、场景初始化、metrics 结构与可复用能力。<br>
+- `SUB-B / 实验入口`：盘点 `experiments/first_wave_mvp/` 现有入口、输出目录与真实运行方式。<br>
+- `SUB-C / 验证面`：盘点现有 tests 与 lint 风险，识别 `T8` 新增测试/验证最小闭环。<br>
+本 step 的通过标准：形成“允许改哪些文件、必须新增哪些能力、哪些点需要先 QA 问用户”的明确清单；若三位审阅者认可，再进入并行盘点执行。</div>
+      </div>
+    </div>
+    <div class="msg gpt gpt">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">GPT</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-06 20:20:27</span>
+        </div>
+        <div class="msg-content">结论：Conditional Approve<br>
+- 建议把 Step-1 的产出固定为“`T8 条目 -&gt; 现状实现位置 -&gt; 差距 -&gt; 允许修改文件 -&gt; 证据`”矩阵，避免后续实现阶段出现口径漂移或越白名单修改。<br>
+- 需要在 Step-1 明确“必须先 QA 问用户”的触发条件（如：发现需改白名单外文件、T8 与 T2-T7 语义冲突、运行链路依赖外部前置但文档未定义），并给出统一提问模板。<br>
+- 即使本阶段不跑实验，也应补一项“静态可执行链路检查”（实验入口参数、场景初始化调用链、指标采集落盘路径）以提前暴露结构性阻塞点，降低 Step-2 返工风险。<br>
+- “验证面盘点”应提前绑定 A0/A1/A2/A3 的最小验收标准（语义判据 + 关键指标 + 对应测试落点），否则后续容易只验证“能运行”而非“符合 T8 语义”。<br>
+<br>
+VOTE: approve</div>
+      </div>
+    </div>
+    <div class="msg sonnet sonnet">
+      <div class="msg-avatar">S</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Sonnet</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-06 20:20:27</span>
+        </div>
+        <div class="msg-content"><strong>结论：Conditional Approve</strong><br>
+<br>
+审阅意见：<br>
+<br>
+1. <strong>遗漏：确定性布局 vs 现有 seed-based 初始化的冲突未明确标记</strong><br>
+   - 现有 `scenario_initializer.py` 是基于 `seed` 的随机生成器（`rng.uniform`），而 T8 要求确定性布局（`a=5,b=11,d=9` 等精确数值）。<br>
+   - 这属于<strong>超白名单修改需求</strong>：需要新增确定性初始化函数或修改现有初始化器以支持 `deterministic_layout` 模式。<br>
+   - 盘点报告必须明确列出这一冲突，并 QA 问用户：是新增 `initialize_micro_scenario()` 函数，还是扩展现有 `initialize_scenario()` 的参数？<br>
+<br>
+2. <strong>遗漏：`trace.jsonl` 输出能力现状未盘点</strong><br>
+   - 现有 `experiment_runner.py` 和 `metrics_collector.py` 只有 `summary.json` 输出，没有 `trace.jsonl` 的 tick-by-tick 事件记录能力。<br>
+   - 盘点报告需要明确：`experiment_runner.py` 是否需要新增 trace 收集逻辑？是否需要新增 `TraceCollector` 类？这是否超出现有白名单的修改范围？<br>
+<br>
+3. <strong>遗漏：白名单文件存在状态未清晰列出</strong><br>
+   - 盘点报告应包含表格：6 个白名单文件中哪些已存在、哪些需新建、哪些需实质性修改。<br>
+   - 当前缺失文件：`a_layer_micro_scenarios.py`、`test_a_layer_micro_scenarios.py`、`analysis_report.md`、输出目录。<br>
+<br>
+4. <strong>遗漏：`A3` 无解判据的实现依赖未分析</strong><br>
+   - T8 要求 A3 必须给出 `NO_FEASIBLE_PLAN`，但现有 `gate.py` 的 `accept_candidate` 是否返回明确的 &quot;no feasible&quot; 状态？盘点应确认现有 gate 是否支持区分 &quot;rejected&quot; 和 &quot;no feasible plan&quot;，若不支持需标记为待 QA 项。<br>
+<br>
+5. <strong>建议补充约束</strong><br>
+   - 盘点报告结尾应附 <strong>&quot;Must QA before implementation&quot;</strong> 清单，至少包括：<br>
+     1. 确定性布局实现方式（新增函数 vs 扩展参数）？<br>
+     2. `trace.jsonl` 由谁生成（`experiment_runner` 内联 vs 新增 `TraceCollector`）？<br>
+     3. 若 `gate.py` 不区分 &quot;no feasible&quot; 状态，是否允许修改 `gate.py`（黑名单）还是由 `a_layer_micro_scenarios.py` 自行判断？<br>
+<br>
+VOTE: approve</div>
+      </div>
+    </div>
+    <div class="msg gemini gemini">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Gemini</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-06 20:20:27</span>
+        </div>
+        <div class="msg-content">结论：Conditional Approve<br>
+- <strong>依赖与耦合风险</strong>：在盘点代码主链（特别是 `scenario_initializer.py` 和 `experiment_runner.py`）时，必须显式标记 A 层（A0-A3）逻辑与 T2-T7 既有语义的耦合点。需提前评估新增逻辑是否会侵入公共状态机或核心生命周期，确保严格隔离。<br>
+- <strong>性能与存储隐患</strong>：盘点 `metrics_collector.py` 时，需特别关注 A0-A3 微场景所需新增指标的采集频率和数据规模，评估是否存在高频 I/O 阻塞或内存膨胀的潜在风险。<br>
+- <strong>测试基线确认</strong>：在“验证面”盘点中，除了明确需要新增的测试能力，必须先梳理 `test_a_layer_micro_scenarios.py` 的现有测试覆盖率和用例边界，建立防退化的回归测试基线。<br>
+- <strong>文档契约对齐</strong>：差距确认清单中应包含对 `analysis_report.md` 现有结构和数据契约的分析，确保后续 A 层实验结果的输出格式与既有文档标准完全兼容。<br>
+<br>
+VOTE: approve</div>
+      </div>
+    </div>
+    <div class="msg context-share opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">CONTEXT_SHARE</span>
+          <span class="msg-time">2026-04-06 20:20:27</span>
+        </div>
+        <div class="msg-content">【审阅收敛】<br>
+三位审阅者一致 `approve`，但都要求 Step-1 的盘点结论必须更细：<br>
+- 产出物应固定为“`T8 条目 -&gt; 现状实现位置 -&gt; 差距 -&gt; 允许修改文件 -&gt; 证据`”矩阵。<br>
+- 必须单列 `Must QA before implementation`，包含白名单外修改、T8 与 T2-T7 语义冲突、运行链路存在未定义前置等触发条件。<br>
+- 必须额外盘点 4 个高风险点：确定性布局实现方式、`trace.jsonl` 输出能力、`A3` 的 `NO_FEASIBLE_PLAN` 判据依赖、A 层新增指标/输出对现有 metrics 与 I/O 的影响。</div>
+      </div>
+    </div>
+    <div class="msg execution opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">EXECUTION</span>
+          <span class="msg-time">2026-04-06 20:20:27</span>
+        </div>
+        <div class="msg-content">【Step-1 执行】<br>
+根据审阅共识，开始并行盘点白名单实现面、实验入口与验证面；本 step 仍不改代码、不跑实验，先形成可实施性与阻塞清单。</div>
+      </div>
+    </div>
+    <div class="msg subtask-result opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">SUBTASK_RESULT</span>
+          <span class="msg-time">2026-04-06 20:27:27</span>
+        </div>
+        <div class="msg-content">【SUB-A / 代码主链盘点】<br>
+- `scenario_initializer.py` 当前是 seed 驱动随机布局：主路/匝道位置分别含 `rng.uniform(...)`，与 T8 的确定性微场景不一致，但该文件在白名单内，可通过新增确定性初始化分支解决。<br>
+- `experiment_runner.py` 已有完整闭环：`select_planning_ego -&gt; build_snapshot -&gt; generate_candidates -&gt; accept_candidate -&gt; commit_candidate -&gt; rollout_step -&gt; MetricsCollector`，说明 T8 无需重建算法主链。<br>
+- `metrics_collector.py` 目前只产出车流指标，不含 `trace.jsonl`、`accepted/rejected_candidate_count`、`first_accept_time_s`、`initial_vehicle_states`、`final_status` 等 T8 诊断字段。<br>
+- `state_machine.py` 已明确存在 `PlannerSignal.NO_FEASIBLE_PLAN`；这说明 A3 的“无解”应建模为 planner 结果而不是 gate `RejectReason`。<br>
+- 结论：主链可复用，白名单内主要要补“确定性初始化 + 诊断 trace + 微场景 summary 字段”。</div>
+      </div>
+    </div>
+    <div class="msg subtask-result opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">SUBTASK_RESULT</span>
+          <span class="msg-time">2026-04-06 20:27:27</span>
+        </div>
+        <div class="msg-content">【SUB-B / 实验入口与输出盘点】<br>
+- 现有 `experiments/first_wave_mvp/*.py` 都是固定脚本入口，默认只写 `experiments/first_wave_mvp/outputs/&lt;experiment_id&gt;/summary.json`。<br>
+- 仓库当前不存在 `experiments/first_wave_mvp/a_layer_micro_scenarios.py`、`outputs/a_layer_micro_scenarios/<strong>`、`analysis_report.md`。<br>
+- 现有 `light_load_correctness.py` / `medium_high_load_competition.py` 已证明“两策略同一 summary.json 对比”是可行模式，可作为 A1 的结构参考，但当前没有 `--scenario / --policy / --all` CLI。<br>
+- `common.py` 与 `metrics.py` 绑定 3-seed 聚合口径；T8 是确定性微场景，宜新写微场景专用入口与 summary 结构，而不是强行复用现有 seed 聚合层。</strong></div>
+      </div>
+    </div>
+    <div class="msg subtask-result opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">SUBTASK_RESULT</span>
+          <span class="msg-time">2026-04-06 20:27:27</span>
+        </div>
+        <div class="msg-content">【SUB-C / 测试与验证盘点】<br>
+- 当前不存在 `tests/first_wave_mvp/test_a_layer_micro_scenarios.py`，需新增微场景专属测试。<br>
+- 现有测试已验证：数值执行器同 seed 可复现、实验入口会真实落盘 `summary.json`、回归门禁依赖 `aggregate_stats_view` 的 worst-seed 口径。<br>
+- 已确认一个重要统计事实：`metrics.aggregate_to_summary()` 对 `planned_actual_*_p95` 取跨 seed 均值，而 `regression_gate.py` 用 worst-seed 判门；这正是 T8 要求核查的“planned/actual 统计定义错位”线索。<br>
+- 结论：T8 新测试可在白名单内补齐，但分析报告必须单独说明 deterministic 微场景口径与现有 3-seed 回归门禁口径的差异。</div>
+      </div>
+    </div>
+    <div class="msg context-share opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">CONTEXT_SHARE</span>
+          <span class="msg-time">2026-04-06 20:27:27</span>
+        </div>
+        <div class="msg-content">【Step-1 收敛】<br>
+- 当前未发现必须改黑名单文件的硬阻塞。<br>
+- 需要在 Step-2 提案里显式冻结两个实现假设：<br>
+  1. 将 T8 中 `a/b/c/d` 直接映射为各车的 `VehicleState.x_pos_m`（当前主链和现有测试唯一消费的位置字段）。<br>
+  2. 将 `NO_FEASIBLE_PLAN` 视为 planner 结果：可能来自“候选为空”或“候选全被 gate 拒绝”，因此必须用 trace 区分，而不是塞进 `RejectReason`。<br>
+- 若三位审阅者认为上述两点构成 spec 冲突，则下一步必须先发 `QA` 问用户；否则可在白名单内继续实现。</div>
+      </div>
+    </div>
+    <div class="msg proposal opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">PROPOSAL</span>
+          <span class="msg-time">2026-04-06 20:27:27</span>
+        </div>
+        <div class="msg-content">【Step-2 提案：按白名单实现 A 层微场景闭环】<br>
+我建议下一 step 在白名单内直接落地实现，并维持 T2-T7 语义不变：<br>
+1. `scenario_initializer.py`：新增确定性微场景初始化能力，冻结 `A0/A1/A2/A3` 的车辆布局、同速起步与时长配置；保持现有 seed 驱动初始化接口不破坏。<br>
+2. `experiment_runner.py`：扩展为可接受“已初始化微场景 + 诊断采集”输入，补 trace 事件、候选 accept/reject 计数、首次 accept 时刻、final status 等；默认行为保持兼容现有三实验。<br>
+3. `metrics_collector.py`：补微场景 summary 所需字段，但不改现有 `ExperimentResultSummary` 契约，也不碰 `metrics.py` / `regression_gate.py`。<br>
+4. 新增 `experiments/first_wave_mvp/a_layer_micro_scenarios.py`：提供 `--scenario` / `--policy` / `--all` CLI，按场景输出 `summary.json`、`trace.jsonl`，并汇总 `analysis_report.md`。<br>
+5. 新增 `tests/first_wave_mvp/test_a_layer_micro_scenarios.py`：覆盖确定性初始化、A1 fixed/flexible 对比输出、A3 `NO_FEASIBLE_PLAN`、文件落盘和 schema。<br>
+6. 验证顺序：先跑新增测试，再跑 `tests/first_wave_mvp/` 全量，再读 lints；全部通过后才真实运行 `A0/A1/A2/A3` 并产出分析报告。<br>
+<br>
+关键实现假设：<br>
+- 将 T8 的 `a/b/c/d` 视为对应车的 `x_pos_m`（米）初始位置。<br>
+- 对 A1 允许在同一 `summary.json` / `trace.jsonl` 内记录两种 policy，并增加 `policy_runs`/`comparison` 字段，以满足“每个场景一个目录”的要求。<br>
+- 对 planned/actual 错位，报告中同时给出“单次微场景运行值”和“现有三实验 gate 口径差异说明”，不擅自改旧门禁定义。<br>
+若三位审阅者认可且无人要求先 QA，我将进入白名单文件编辑。</div>
+      </div>
+    </div>
+    <div class="msg gpt gpt">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">GPT</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-06 20:30:24</span>
+        </div>
+        <div class="msg-content">结论：Conditional Approve<br>
+- 需要先 QA 用户：`T8` 里的 `a/b/c/d` 是否“绝对道路坐标（直接写入 `VehicleState.x_pos_m`）”仍有歧义。若它其实是相对间距/参考点偏移，当前假设会把 A0~A3 场景语义做偏，建议先确认“坐标系原点、单位、是否含车长偏置”再实现。<br>
+- 需要先 QA 用户：A1 的 fixed/flexible 是否必须写入同一个 `summary.json`/`trace.jsonl`。把两次 policy run 混在单文件有较高契约风险，建议先确认；最小改法是“按 policy 分目录输出 + 在 `analysis_report.md` 做对比汇总”。<br>
+- `experiment_runner.py` 扩展建议采用可选开关（默认关闭）并保持旧路径零侵入；A3 状态应明确落在 `PlannerSignal.NO_FEASIBLE_PLAN` 分支，避免被误记为 gate reject。<br>
+- 不改 `metrics.py` / `regression_gate.py` 可以接受，但微场景 `summary.json` 最好增加并列诊断字段，避免读者把旧 gate 口径误当微场景结论。<br>
+- 测试建议补两类关键断言：确定性初始化稳定且不破坏旧 seed API；A3 必须由 planner 无解触发，A1 双 policy 输出结构可被稳定解析。<br>
+<br>
+VOTE: reject</div>
+      </div>
+    </div>
+    <div class="msg sonnet sonnet">
+      <div class="msg-avatar">S</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Sonnet</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-06 20:30:24</span>
+        </div>
+        <div class="msg-content">结论：Conditional Approve<br>
+- 建议 QA 用户确认 A2 中 `c=1,d=9` 的语义：当前更自然的实现是把 `c/d` 当作车辆标签、把 `1/9` 当作对应车的 `x_pos_m`，因此 `d` 比 `c` 更靠前。<br>
+- A3 已由 T8 明确授权：若 `d=10.5` 仍可解，只允许在 `[10.5, 10.9]` 内单向收紧一次并写入报告，因此可在实现内按该规则执行，不必先改黑名单。<br>
+- `scenario_initializer.py` 最好新增独立的 `initialize_micro_scenario(...)` 入口，避免与现有随机 seed 初始化语义混淆。<br>
+- `trace.jsonl` 应把 planner 无解与 gate reject 分开记录：`reject_reason` 只对应 gate，`planner_signal` 单列记录 `NO_FEASIBLE_PLAN`。<br>
+<br>
+VOTE: approve</div>
+      </div>
+    </div>
+    <div class="msg gemini gemini">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Gemini</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-06 20:30:24</span>
+        </div>
+        <div class="msg-content">结论：Conditional Approve<br>
+- `a/b/c/d -&gt; x_pos_m` 的实现不应只注入位置，还要确保速度、车道、执行状态同样可确定性注入，这样微场景才真能触发预期边界。<br>
+- 不建议把 A1 拆成多个 scenario 目录，因为用户已要求每个场景固定到一个独立目录；更稳妥的做法是在同一目录的 `summary.json`/`trace.jsonl` 中加 `policy_tag` / `run_id` 字段区分 fixed 与 flexible。<br>
+- A3 的最终状态必须显式落到 planner 无解路径，并在测试中证明不会被误判为异常崩溃或普通 reject。<br>
+- planned/actual 口径错位只做报告说明，符合“不擅改 T2-T7 既有语义”的边界。<br>
+<br>
+VOTE: approve</div>
+      </div>
+    </div>
+    <div class="msg context-share opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">CONTEXT_SHARE</span>
+          <span class="msg-time">2026-04-06 20:30:24</span>
+        </div>
+        <div class="msg-content">【Step-2 审阅分歧收敛】<br>
+- 审阅分歧主要在“是否必须先 QA 用户”。<br>
+- Opus 当前判断：尚未出现 `T8` 与主链的硬冲突。原因是：<br>
+  1. 现有代码与测试唯一消费的位置字段就是 `x_pos_m`，因此把 `a/b/c/d` 作为各车的初始 `x_pos_m` 是最小新增语义。<br>
+  2. 用户已明确要求“每个场景一个独立目录”，因此 A1 更适合同目录内做双 policy 记录，而不是拆成两个 scenario。<br>
+  3. T8 已显式授权 A3 在 `[10.5, 10.9]` 内单向收紧一次，无需额外改 spec。<br>
+- 风险处理方式：若实现后发现 `a/b/c/d -&gt; x_pos_m` 无法让 A2/A3 达到 T8 预期，或 A1 单目录双 policy 结构无法稳定落盘/测试，再立即发 `QA` 问用户。</div>
+      </div>
+    </div>
+    <div class="msg vote gpt">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">GPT</span>
+          <span class="msg-tag">VOTE</span>
+          <span class="msg-time">2026-04-06 20:30:24</span>
+        </div>
+        <div class="msg-content">Step-2 投票：reject。理由：当前 `a/b/c/d` 语义与 A1 单目录双 policy 契约仍存在解释风险，建议先 QA 用户。</div>
+      </div>
+    </div>
+    <div class="msg vote sonnet">
+      <div class="msg-avatar">S</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Sonnet</span>
+          <span class="msg-tag">VOTE</span>
+          <span class="msg-time">2026-04-06 20:30:24</span>
+        </div>
+        <div class="msg-content">Step-2 投票：approve。理由：在把 `c/d` 当车辆标签、`1/9` 当 `x_pos_m`，并将 planner 无解与 gate reject 分列记录的前提下，可在白名单内继续实现。</div>
+      </div>
+    </div>
+    <div class="msg vote gemini">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Gemini</span>
+          <span class="msg-tag">VOTE</span>
+          <span class="msg-time">2026-04-06 20:30:24</span>
+        </div>
+        <div class="msg-content">Step-2 投票：approve。理由：T8 要求每个场景一个目录，A1 适合在同目录内做双 policy 记录；`a/b/c/d` 最小实现可直接注入到确定性状态。</div>
+      </div>
+    </div>
+    <div class="msg vote opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">VOTE</span>
+          <span class="msg-time">2026-04-06 20:30:24</span>
+        </div>
+        <div class="msg-content">Step-2 投票：approve。理由：当前没有黑名单级冲突，且所有风险都可通过独立微场景初始化、显式 planner_signal 字段和新增测试在白名单内收敛；若实现中证明假设不成立，再即时升级为 QA。</div>
+      </div>
+    </div>
+    <div class="msg execution opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">EXECUTION</span>
+          <span class="msg-time">2026-04-06 20:30:24</span>
+        </div>
+        <div class="msg-content">【Step-2 执行】<br>
+4 方投票结果：approve 3，reject 1。根据少数服从多数，进入白名单文件实现阶段。执行边界追加如下：<br>
+- 仅把 `a/b/c/d` 解释为车辆初始 `x_pos_m`，不额外引入新坐标语义。<br>
+- A1 保持单 scenario 目录，在同一 `summary.json` / `trace.jsonl` 中显式区分 `policy_tag`。<br>
+- `planner_signal` 与 `reject_reason` 必须分列记录。<br>
+- 若任一假设在实现/测试中被证伪，立即停下并发 `QA`。</div>
+      </div>
+    </div>
+    <div class="msg context-share opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">CONTEXT_SHARE</span>
+          <span class="msg-time">2026-04-06 20:33:02</span>
+        </div>
+        <div class="msg-content">【实现中发现的新证据】<br>
+- 用当前主链做最小 sanity check：把 `A0` 按“`a/b/d` 直接映射为各车 `x_pos_m`，同速 10 m/s”送入现有 `build_snapshot -&gt; generate_candidates -&gt; accept_candidate`。<br>
+- 结果：`fifo_fixed_anchor` 候选数 = 0，`fifo_flexible_anchor` 候选数 = 0。<br>
+- 原因不是单次采样偶然，而是当前 `T4/T7` 主链下，主路与匝道在 `PLANNING` 阶段都按常速前进，缺少会改变相对时序的纵向调节；因此若初始同速且顺序固定，后续 tick 里相对到达顺序不会自然反转，A0/A1 就不可能从“不合规”逐步变成“合规”。<br>
+- 这说明：若把 T8 的 `a=5,b=11,d=9` 直接解释成现有状态的 `x_pos_m`，则会与 T8 对 `A0` 的预期发生冲突。</div>
+      </div>
+    </div>
+    <div class="msg qa opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">QA</span>
+          <span class="msg-time">2026-04-06 20:33:02</span>
+        </div>
+        <div class="msg-content">【需要用户拍板的冲突】<br>
+当前发现 `T8` 场景定义与现有代码主链存在关键语义冲突，按你的要求先停下询问，不自行重定义。<br>
+<br>
+已验证事实：<br>
+1. 现有主链在 `PLANNING` 阶段不会主动改变主路/匝道的相对时序，只做常速推进。<br>
+2. 若把 `A0/A1` 的 `a=5,b=11,d=9` 直接映射为 `VehicleState.x_pos_m`，则 `fixed` 和 `flexible` 在当前 Step2 下都生成 0 个候选。<br>
+3. 因此 `A0` 无法满足 T8 所写的“至少一种策略能逐步形成合规 gap，并无碰撞通过”。<br>
+<br>
+请你明确以下哪种口径才是 T8 真正想要的：<br>
+- 口径 A：`a/b/c/d` 不是当前代码里的直接 `x_pos_m`，而是另一种场景坐标/间距语义；请你给出明确映射。<br>
+- 口径 B：允许 T8 微场景在白名单内引入额外的确定性纵向调节/速度设定，使同速起步后仍能逐步形成 gap。<br>
+- 口径 C：`A0/A1/A2/A3` 的预期结果需要按当前主链重解释（例如 A0 不是“可工作场景”）。<br>
+<br>
+在你拍板前，我不会继续改代码或运行微场景实现，以避免擅自改写 T2-T7 既有语义。</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

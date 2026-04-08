@@ -1,0 +1,37 @@
+---
+description: "编码规范。定义通用编码约束。技术栈确定后由 design-reviewer skill 从知识库派生项目适配层。"
+alwaysApply: true
+---
+
+<!--
+Derived-From: /home/liangyunxuan/src/.cursor/templates/rules/coding-standards.base.mdc
+Scope: repo-instance
+Drift-Allowed: true
+Backport: manual
+-->
+
+# 编码规范
+
+## 通用基座（跨项目通用，不得删除）
+
+- 禁止 try-catch/recover 吞错误（必须 log、re-throw 或返回显式错误状态）
+- 修改前必须先 Read 文件
+- 新增逻辑必须有测试覆盖
+- 只实现 spec 列出的内容，不顺手增加 spec 未提及的防御性代码、预留接口或包装层
+- 禁止魔法数字（使用命名常量）
+
+## 项目适配层（design 定稿后补充）
+
+<!--
+  此区域由 design-reviewer skill 从知识库自动派生，也可手动添加。
+  格式示例：
+
+  ### Python 规则（后端）
+  - Python 版本: 3.11+，使用原生语法
+  - Pydantic v2 语法
+  - ...
+
+  ### TypeScript 规则（前端）
+  - Vue 3 + Composition API
+  - ...
+-->

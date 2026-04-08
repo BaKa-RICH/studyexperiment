@@ -1,0 +1,262 @@
+{
+  "experiment_id": "cav_penetration_and_scope_ablation",
+  "mode": "minimal_numeric_executor",
+  "spec": {
+    "experiment_id": "cav_penetration_and_scope_ablation",
+    "title": "CAV 渗透率 / 协同范围消融",
+    "objective": "验证在协同能力被削弱时，系统行为是否平滑退化且不突然失稳。",
+    "default_seeds": [
+      42,
+      123,
+      999
+    ],
+    "supported_policies": [
+      "fifo_fixed_anchor",
+      "fifo_flexible_anchor"
+    ],
+    "default_parameters": {
+      "cav_ratio_grid": [
+        0.0,
+        0.5,
+        1.0
+      ],
+      "cooperation_scope_grid": [
+        "minimal",
+        "expanded"
+      ],
+      "seed_count": 3,
+      "sim_duration_s": 25.0,
+      "mainline_vph": 1000,
+      "ramp_vph": 300
+    },
+    "output_path": "experiments/first_wave_mvp/outputs/cav_penetration_and_scope_ablation/summary.json",
+    "seed_count": 3,
+    "per_seed_results": []
+  },
+  "config_results": {
+    "low_penetration_minimal_scope": {
+      "policy_tag": "fifo_flexible_anchor",
+      "parameters": {
+        "cav_ratio_grid": [
+          0.0,
+          0.5,
+          1.0
+        ],
+        "cooperation_scope_grid": [
+          "minimal",
+          "expanded"
+        ],
+        "seed_count": 3,
+        "sim_duration_s": 25.0,
+        "mainline_vph": 1100,
+        "ramp_vph": 320,
+        "mainline_cav_ratio": 0.0,
+        "mainline_speed_min_mps": 8.5,
+        "mainline_speed_max_mps": 10.5,
+        "ramp_speed_min_mps": 8.0,
+        "ramp_speed_max_mps": 9.5
+      },
+      "per_seed_results": [
+        {
+          "experiment_id": "cav_penetration_and_scope_ablation",
+          "policy_tag": "fifo_flexible_anchor",
+          "seed": 42,
+          "completion_rate": 1.0,
+          "abort_rate": 0.0,
+          "collision_count": 0,
+          "safety_violation_count": 0,
+          "avg_ramp_delay_s": 1.0462679301,
+          "throughput_vph": 935.0649350649,
+          "planned_actual_time_error_p95_s": 1.055769197350882,
+          "planned_actual_position_error_p95_m": 9.364937596296556,
+          "failed": false,
+          "failure_reason": null
+        },
+        {
+          "experiment_id": "cav_penetration_and_scope_ablation",
+          "policy_tag": "fifo_flexible_anchor",
+          "seed": 123,
+          "completion_rate": 1.0,
+          "abort_rate": 0.0,
+          "collision_count": 0,
+          "safety_violation_count": 0,
+          "avg_ramp_delay_s": 1.0260670649,
+          "throughput_vph": 1000.0,
+          "planned_actual_time_error_p95_s": 1.0293174455399638,
+          "planned_actual_position_error_p95_m": 9.514732200760278,
+          "failed": false,
+          "failure_reason": null
+        },
+        {
+          "experiment_id": "cav_penetration_and_scope_ablation",
+          "policy_tag": "fifo_flexible_anchor",
+          "seed": 999,
+          "completion_rate": 1.0,
+          "abort_rate": 0.0,
+          "collision_count": 0,
+          "safety_violation_count": 0,
+          "avg_ramp_delay_s": 1.0754845132,
+          "throughput_vph": 935.0649350649,
+          "planned_actual_time_error_p95_s": 1.0777398388161652,
+          "planned_actual_position_error_p95_m": 10.055274280506879,
+          "failed": false,
+          "failure_reason": null
+        }
+      ],
+      "summary": {
+        "experiment_id": "cav_penetration_and_scope_ablation",
+        "policy_tag": "fifo_flexible_anchor",
+        "seed_count": 3,
+        "completion_rate": 1.0,
+        "abort_rate": 0.0,
+        "collision_count": 0,
+        "safety_violation_count": 0,
+        "avg_ramp_delay_s": 1.0492731694,
+        "throughput_vph": 956.7099567099,
+        "planned_actual_time_error_p95_s": 1.0542754939,
+        "planned_actual_position_error_p95_m": 9.6449813592
+      },
+      "stats_view": {
+        "seed_count": 3.0,
+        "successful_seed_count": 3.0,
+        "failed_seed_count": 0.0,
+        "completion_rate_mean": 1.0,
+        "completion_rate_worst_seed": 1.0,
+        "completion_rate_p95": 1.0,
+        "abort_rate_mean": 0.0,
+        "abort_rate_worst_seed": 0.0,
+        "abort_rate_p95": 0.0,
+        "collision_count_mean": 0.0,
+        "collision_count_worst_seed": 0.0,
+        "collision_count_p95": 0.0,
+        "safety_violation_count_mean": 0.0,
+        "safety_violation_count_worst_seed": 0.0,
+        "safety_violation_count_p95": 0.0,
+        "avg_ramp_delay_s_mean": 1.0492731694,
+        "avg_ramp_delay_s_worst_seed": 1.0754845132,
+        "avg_ramp_delay_s_p95": 1.0754845132,
+        "throughput_vph_mean": 956.7099567099,
+        "throughput_vph_worst_seed": 935.0649350649,
+        "throughput_vph_p95": 1000.0,
+        "planned_actual_time_error_p95_s_mean": 1.0542754939,
+        "planned_actual_time_error_p95_s_worst_seed": 1.0777398388161652,
+        "planned_actual_time_error_p95_s_p95": 1.0777398388161652,
+        "planned_actual_position_error_p95_m_mean": 9.6449813592,
+        "planned_actual_position_error_p95_m_worst_seed": 10.055274280506879,
+        "planned_actual_position_error_p95_m_p95": 10.055274280506879
+      }
+    },
+    "full_cav_expanded_scope": {
+      "policy_tag": "fifo_flexible_anchor",
+      "parameters": {
+        "cav_ratio_grid": [
+          0.0,
+          0.5,
+          1.0
+        ],
+        "cooperation_scope_grid": [
+          "minimal",
+          "expanded"
+        ],
+        "seed_count": 3,
+        "sim_duration_s": 25.0,
+        "mainline_vph": 900,
+        "ramp_vph": 280,
+        "mainline_cav_ratio": 1.0,
+        "mainline_speed_min_mps": 10.0,
+        "mainline_speed_max_mps": 12.0,
+        "ramp_speed_min_mps": 9.0,
+        "ramp_speed_max_mps": 11.0
+      },
+      "per_seed_results": [
+        {
+          "experiment_id": "cav_penetration_and_scope_ablation",
+          "policy_tag": "fifo_flexible_anchor",
+          "seed": 42,
+          "completion_rate": 1.0,
+          "abort_rate": 0.0,
+          "collision_count": 0,
+          "safety_violation_count": 0,
+          "avg_ramp_delay_s": 1.0627662404,
+          "throughput_vph": 1000.0,
+          "planned_actual_time_error_p95_s": 1.0672819476171975,
+          "planned_actual_position_error_p95_m": 11.556079613928873,
+          "failed": false,
+          "failure_reason": null
+        },
+        {
+          "experiment_id": "cav_penetration_and_scope_ablation",
+          "policy_tag": "fifo_flexible_anchor",
+          "seed": 123,
+          "completion_rate": 1.0,
+          "abort_rate": 0.0,
+          "collision_count": 0,
+          "safety_violation_count": 0,
+          "avg_ramp_delay_s": 1.0662191247,
+          "throughput_vph": 1014.0845070423,
+          "planned_actual_time_error_p95_s": 1.0742147525674253,
+          "planned_actual_position_error_p95_m": 11.405762222154323,
+          "failed": false,
+          "failure_reason": null
+        },
+        {
+          "experiment_id": "cav_penetration_and_scope_ablation",
+          "policy_tag": "fifo_flexible_anchor",
+          "seed": 999,
+          "completion_rate": 1.0,
+          "abort_rate": 0.0,
+          "collision_count": 0,
+          "safety_violation_count": 0,
+          "avg_ramp_delay_s": 1.0249194747,
+          "throughput_vph": 986.301369863,
+          "planned_actual_time_error_p95_s": 1.0251180251927128,
+          "planned_actual_position_error_p95_m": 11.168753106597677,
+          "failed": false,
+          "failure_reason": null
+        }
+      ],
+      "summary": {
+        "experiment_id": "cav_penetration_and_scope_ablation",
+        "policy_tag": "fifo_flexible_anchor",
+        "seed_count": 3,
+        "completion_rate": 1.0,
+        "abort_rate": 0.0,
+        "collision_count": 0,
+        "safety_violation_count": 0,
+        "avg_ramp_delay_s": 1.0513016133,
+        "throughput_vph": 1000.1286256351,
+        "planned_actual_time_error_p95_s": 1.0555382418,
+        "planned_actual_position_error_p95_m": 11.3768649809
+      },
+      "stats_view": {
+        "seed_count": 3.0,
+        "successful_seed_count": 3.0,
+        "failed_seed_count": 0.0,
+        "completion_rate_mean": 1.0,
+        "completion_rate_worst_seed": 1.0,
+        "completion_rate_p95": 1.0,
+        "abort_rate_mean": 0.0,
+        "abort_rate_worst_seed": 0.0,
+        "abort_rate_p95": 0.0,
+        "collision_count_mean": 0.0,
+        "collision_count_worst_seed": 0.0,
+        "collision_count_p95": 0.0,
+        "safety_violation_count_mean": 0.0,
+        "safety_violation_count_worst_seed": 0.0,
+        "safety_violation_count_p95": 0.0,
+        "avg_ramp_delay_s_mean": 1.0513016133,
+        "avg_ramp_delay_s_worst_seed": 1.0662191247,
+        "avg_ramp_delay_s_p95": 1.0662191247,
+        "throughput_vph_mean": 1000.1286256351,
+        "throughput_vph_worst_seed": 986.301369863,
+        "throughput_vph_p95": 1014.0845070423,
+        "planned_actual_time_error_p95_s_mean": 1.0555382418,
+        "planned_actual_time_error_p95_s_worst_seed": 1.0742147525674253,
+        "planned_actual_time_error_p95_s_p95": 1.0742147525674253,
+        "planned_actual_position_error_p95_m_mean": 11.3768649809,
+        "planned_actual_position_error_p95_m_worst_seed": 11.556079613928873,
+        "planned_actual_position_error_p95_m_p95": 11.556079613928873
+      }
+    }
+  }
+}

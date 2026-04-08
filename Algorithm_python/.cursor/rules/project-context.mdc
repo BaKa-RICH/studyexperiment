@@ -1,0 +1,121 @@
+---
+description: "项目上下文。提供技术栈、目录约定和关键约束。所有对话自动加载。"
+alwaysApply: true
+---
+
+<!--
+Derived-From: /home/liangyunxuan/src/.cursor/templates/rules/project-context.base.mdc
+Scope: repo-instance
+Drift-Allowed: true
+Backport: manual
+-->
+
+# 项目上下文
+
+## 最小启动层（项目创建时填写）
+
+### 项目简介
+
+将 `../ramp/` 中部署在 SUMO 上的匝道汇入与换道相关算法抽离为独立的 Python 仓库，只做纯数值验证，不依赖 SUMO 运行时。当前已经完成第一波 MVP 正式文档收敛，接下来进入 repo 内的 feature/task 拆分、代码骨架、实现与验证闭环。
+
+### 技术方向
+
+- 语言：Python `3.11+`
+- 当前目标：基于已冻结的单匝道数值验证设计，完成第一波 MVP 的 feature/task 拆分、代码骨架、实现与验证
+- 第一波范围：`FIFO + fixed anchor`、`FIFO + flexible anchor`、共享 `acceptance gate`、统一 `common I/O contract`、统一时离散与参数层、首轮 3 个实验门禁
+- 第二波范围：简单 `DP`、两层分层算法、上游换道、多个 `active decision partition` 与更大范围协同
+- 当前阶段：正式设计文档已定稿到可实现粒度，下一步是 repo 内实现拆分，不再处于 inventory 盘点阶段
+
+### 目录骨架
+
+- `README.md`：项目入口与渐进式披露阅读顺序
+- `.cursor/rules/`：当前 repo 生效规则实例
+- `docs/`：正式设计、契约、公式、推导与后续 feature/task 模板入口
+- `src/`：纯算法与数值验证核心代码
+- `tests/`：单元测试、集成测试、数值回归验证
+- `experiments/`：典型实验入口与批量验证脚本
+- `reference/ramp_inventory/`：从 `../ramp/` 清点出的算法、场景、实验资料
+- `forum/`：过程讨论归档，不是正式真源
+
+## 定稿回填层（design 敲定后补充）
+
+### 技术栈详情
+
+- Python：`3.11+`
+- 当前形态：单机本地数值验证，不提供 HTTP / SSE API
+- 契约版本：`mvp-v1`
+- 当前正式真源：
+  - `docs/design.md`
+  - `docs/contracts.md`
+  - `docs/formulas.md`
+  - `docs/derivations.md`
+
+### 关键约束
+
+- `docs/` 是正式真源；`reference/ramp_inventory/` 是旧系统证据层；`forum/` 是过程归档层
+- 第一波只实现 `FIFO + fixed anchor` 与 `FIFO + flexible anchor`，`no_control` 仅作为实验参考下界
+- `Step 2` 与 `Step 3` 必须分离；`Step 3` 只做共享验收，不允许修改方案
+- 第一波只允许 1 个 `active decision partition`，且每个 planning tick 只服务 1 辆 ramp CAV
+- `COMMITTED` 在候选通过 gate 后立即生效，不设置稳定窗口；`DECOMMIT` 不进入第一波实现
+- `NO_FEASIBLE_PLAN` 是 planner 结果，不是 `REJECT(reason)` 枚举
+- 所有共享类型、字段锁定规则和模块边界以 `docs/contracts.md` 为准
+- 所有公式、默认参数和时离散以 `docs/formulas.md` 为准，解释与理由以 `docs/derivations.md` 为准
+
+### 运行时结构
+
+- 当前推荐的第一波闭环主链路：
+  1. `build_snapshot()`
+  2. `generate_candidates()`
+  3. `accept_candidate()`
+  4. `commit_candidate()` 或输出 `NO_FEASIBLE_PLAN`
+  5. `rollout_step()`
+- 运行时为单进程本地数值仿真，不依赖 SUMO / TraCI 运行时对象
+- 配置与共享参数的核心载体是 `ScenarioConfig`
+- 候选与执行的核心对象是：
+  - `PlanningSnapshot`
+  - `CandidatePlan`
+  - `GateResult`
+  - `CommittedPlan`
+  - `ExperimentResultSummary`
+
+### 当前生效协议
+
+- 当前几何与语义冻结：
+  - `ramp_approach_subzone = [0m, 50m)`
+  - `legal_merge_zone = [50m, 290m]`
+  - `emergency_tail = [290m, 300m]`
+  - `fixed_anchor = 170m`
+  - `fixed / flexible` 统一绑定 `completion anchor`
+- 当前默认参数冻结：
+  - `planning_tick = 0.1s`
+  - `rollout_tick = 0.1s`
+  - `gate_sampling_dt = 0.1s`
+  - `T_lc^{MVP} = 3.0s`
+  - `h_pr = 1.5s`
+  - `h_rf = 2.0s`
+  - `a_max = 2.6 m/s^2`
+  - `|a_fail_safe| = 4.5 m/s^2`
+  - `minGap = 2.5m`
+  - `tau = 1.0s`
+- 当前测试分层冻结：
+  - `L1`：公式与参数正确性
+  - `L2`：`snapshot -> Step 2 -> Step 3 -> COMMIT/WAIT/FAIL-SAFE -> rollout` 闭环正确性
+  - `L3`：轻负荷正确性、中高负荷竞争、CAV 渗透率 / 协同范围消融
+- 当前推荐的阅读顺序：
+  - `README.md`
+  - `docs/design.md`
+  - `docs/contracts.md`
+  - `docs/formulas.md`
+  - `docs/derivations.md`
+
+## 文档地图
+
+- 项目入口：`README.md`
+- 顶层 spec：`docs/design.md`、`docs/contracts.md`、`docs/formulas.md`、`docs/derivations.md`
+- 旧系统证据：`reference/ramp_inventory/README.md`
+- feature spec：`docs/features/<feature>/`
+- 模板入口：`docs/TEMPLATES.md`
+
+## 项目适配层（由 design-reviewer skill 从知识库派生）
+
+<!-- Knowledge-Base-Derived 约束会追加在此处 -->

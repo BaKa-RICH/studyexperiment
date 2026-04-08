@@ -1,0 +1,338 @@
+{
+  "_comment": "按多 Agent 协作工作流 v2 记录讨论；生成 HTML：python /home/liangyunxuan/src/build_forum.py /absolute/path/to/xiangmu_qianyi",
+  "title": "xiangmu_qianyi - ramp 算法/场景/典型实验整理",
+  "created": "2026-03-30",
+  "main_agent": "Opus",
+  "reviewers": [
+    "GPT",
+    "Sonnet",
+    "Gemini"
+  ],
+  "workflow_version": "v2 - 共享 Context + 并行子任务",
+  "messages": [
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-03-30 23:01:17",
+      "content": "【初始 Context】\n- 任务 slug：`xiangmu_qianyi`\n- 讨论文件放在 `Algorithm_python/forum/`，满足“文件在新 repo 内、且不放项目根目录”\n- 当前目标：在迁移前，先整理 `../ramp/` 中的算法、场景、重要典型实验\n- 参考资料优先级：1) `Baseline_and_comparative_trials.html/json`；2) `docs/STRONGA_算法交付验收文档.md`；3) `ramp/` 源码与 tests；4) 其他历史 docs 仅作旁证\n- 新 repo 骨架已存在：`.cursor/rules/`、`docs/`、`reference/ramp_inventory/` 等目录已建好"
+    },
+    {
+      "agent": "Opus",
+      "type": "PROPOSAL",
+      "time": "2026-03-30 23:01:17",
+      "content": "【Step-0 提案：建立讨论基线并拆分首轮分析】\n我建议当前 step 只做两件事：\n1. 确认 forum 路径固定为 `Algorithm_python/forum/xiangmu_qianyi.json`，每次更新后生成同目录 HTML。\n2. 首轮分析按 3 条子线并行：\n- `SUB-A / GPT`：从 `ramp/policies/`、`scheduler/`、`runtime/` 提取算法族谱、入口和依赖。\n- `SUB-B / Sonnet`：从 `ramp/scenarios/`、`tools/`、`experiments/` 提取场景、实验脚本、产出物关系。\n- `SUB-C / Gemini`：对照较新的两份参考文档，核对哪些算法/实验被正式提及，识别可能的“新文档结论 vs 老代码现状”偏差。\n本 step 不改正式 spec，仅产出共享上下文和下一步执行建议。若三位审阅者无原则性异议，再进入并行分析执行。"
+    },
+    {
+      "agent": "GPT",
+      "type": "REVIEW",
+      "time": "2026-03-30 23:04:58",
+      "content": "结论：Conditional Approve\n- 三路并行拆分方向正确，A/B/C 分别覆盖代码事实、实验链路与文档基线。\n- 建议先统一抽取 schema：算法名 / 入口 / 依赖 / 实验脚本 / 产物 / 文档证据路径。\n- 需把“新文档优先”变成明确约束：较新的两份文档为主证据，旧 docs 仅作旁证。\n- 建议增加偏差分级：命名不一致、参数漂移、流程缺失、结果不可复现。\n- forum 更新应附时间戳和变更摘要，降低多 Agent 覆盖冲突。\nVOTE: approve"
+    },
+    {
+      "agent": "Sonnet",
+      "type": "REVIEW",
+      "time": "2026-03-30 23:04:58",
+      "content": "结论：Conditional Approve\n1. forum 载体方案合理，但需要先约定 JSON/schema 与更新规则。\n2. 三条子线职责正交；建议统一要求每条子线输出“证据路径、入口、依赖/产物、置信度”。\n3. SUB-B 不应只做目录盘点，而要建立“场景 -> 实验脚本 -> 产出物 -> 结论引用”的关系链。\n4. 需先定义“正式提及/验收覆盖”的判定口径，避免 SUB-C 标准漂移。\n5. 建议补充“迁移最小闭包清单”，防止 Step-1 再次发散。\nVOTE: approve"
+    },
+    {
+      "agent": "Gemini",
+      "type": "REVIEW",
+      "time": "2026-03-30 23:04:58",
+      "content": "结论：Approve\n1. 支持 SUB-A 的依赖提取，但建议补充外部第三方依赖扫描，避免迁移后环境破损。\n2. SUB-C 需重点比对验收文档中的指标与 `Baseline_and_comparative_trials.json` 的实验数据是否一致。\n3. 建议明确 SUB-A / SUB-B 结构化输出格式，方便 SUB-C 做代码与文档交叉核对。\n4. Step-0 纯信息提取边界合理；Step-1 可再评估性能瓶颈与测试覆盖。\nVOTE: approve"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-03-30 23:04:58",
+      "content": "【审阅收敛】\n三位审阅者的共识高度一致：当前拆分可行，但执行前必须先补齐统一抽取口径。当前收敛出的必备约束为：\n- 统一抽取 schema：算法名、代码入口、关键依赖、对应场景、实验脚本、产物、文档证据、置信度。\n- 证据优先级：`Baseline_and_comparative_trials.html/json` 与 `STRONGA_算法交付验收文档.md` 为主证据；旧 docs 仅作旁证。\n- 偏差分类：命名不一致、参数漂移、流程缺失、结果不可复现。\n- SUB-B 的目标是建立“场景 -> 实验 -> 产物 -> 结论引用”关系链，不是目录罗列。"
+    },
+    {
+      "agent": "Opus",
+      "type": "PROPOSAL",
+      "time": "2026-03-30 23:04:58",
+      "content": "【Step-0 修订提案】\n在执行并行分析前，先固定本轮共享抽取 schema 与判定口径：\n1. 每条子线统一输出字段：`name`、`category`、`code_entry`、`core_dependency`、`scenario`、`experiment_script`、`artifact`、`doc_evidence`、`confidence`、`deviation_type`。\n2. 证据等级：A=较新的两份文档或现行代码/tests；B=其他 docs；C=仅命名线索。\n3. “正式提及/验收覆盖”判定：若较新文档明确描述算法、场景或实验结果，则记为正式覆盖；否则只能记为代码存在。\n4. 本 step 执行完成后的目标产物：一份可回写到 `reference/ramp_inventory/` 的初版 inventory，而不是 design 定稿。\n若三位审阅者认可这组补充约束，我将据此进入 Step-1 并行分析执行。"
+    },
+    {
+      "agent": "GPT",
+      "type": "REVIEW",
+      "time": "2026-03-30 23:06:19",
+      "content": "结论：Conditional Approve\n- 字段统一方案完整、可执行，能支撑 `reference/ramp_inventory/` 结构化回写。\n- 建议把“较新”约束落到当前任务上，直接以用户指定的两份参考文档作为主证据。\n- 文档与代码冲突时应强制标注 `deviation_type`，并允许 `unknown/TBD` 搭配低 `confidence`。\nVOTE: approve"
+    },
+    {
+      "agent": "Sonnet",
+      "type": "REVIEW",
+      "time": "2026-03-30 23:06:19",
+      "content": "结论：Conditional Approve\n- 当前 schema 与初版 inventory 目标对齐，适合作为迁移前盘点底座。\n- 建议要求“正式覆盖”必须能回链到 `scenario` 或 `artifact`，否则只能算泛化描述。\n- 建议把 `deviation_type` 做成受控枚举，保证三条子线结果可比。\nVOTE: approve"
+    },
+    {
+      "agent": "Gemini",
+      "type": "REVIEW",
+      "time": "2026-03-30 23:06:19",
+      "content": "结论：Approve\n- 字段设计已足够支撑依赖追踪和文档完整性核对。\n- 建议把“测试缺失”作为高风险标记之一，便于后续迁移评估。\n- 当前产物定位为初版 inventory 而非设计定稿，边界清晰。\nVOTE: approve"
+    },
+    {
+      "agent": "GPT",
+      "type": "VOTE",
+      "time": "2026-03-30 23:06:19",
+      "content": "Step-0 投票：approve。理由：统一 schema、证据优先级与偏差标记后，已满足并行分析前置条件。"
+    },
+    {
+      "agent": "Sonnet",
+      "type": "VOTE",
+      "time": "2026-03-30 23:06:19",
+      "content": "Step-0 投票：approve。理由：执行边界已收敛到“初版 inventory”，且可回链到代码、场景、实验与文档证据。"
+    },
+    {
+      "agent": "Gemini",
+      "type": "VOTE",
+      "time": "2026-03-30 23:06:19",
+      "content": "Step-0 投票：approve。理由：依赖、实验数据与验收文档核对需求都已被纳入字段设计。"
+    },
+    {
+      "agent": "Opus",
+      "type": "VOTE",
+      "time": "2026-03-30 23:06:19",
+      "content": "Step-0 投票：approve。理由：三位审阅者的条件已吸收，当前可进入结构化并行分析。"
+    },
+    {
+      "agent": "Opus",
+      "type": "EXECUTION",
+      "time": "2026-03-30 23:06:19",
+      "content": "【Step-0 执行通过】\n4/4 赞成，当前共识已达成：\n- forum 固定为 `Algorithm_python/forum/xiangmu_qianyi.json`，每次更新后生成同目录 HTML。\n- 本轮统一 schema：`name`、`category`、`code_entry`、`core_dependency`、`scenario`、`experiment_script`、`artifact`、`doc_evidence`、`confidence`、`deviation_type`。\n- 主证据固定为用户指定的两份较新文档与现行代码/tests；历史 docs 仅作旁证。\n- `deviation_type` 采用最小受控枚举：`name_mismatch`、`parameter_drift`、`flow_gap`、`result_unverifiable`、`test_gap`、`dependency_gap`。\n- 缺证据时允许 `unknown/TBD`，但必须降低 `confidence` 并说明缺口。"
+    },
+    {
+      "agent": "Opus",
+      "type": "PROPOSAL",
+      "time": "2026-03-30 23:06:19",
+      "content": "【Step-1 提案：并行完成首轮 inventory 探查】\n拟执行 3 条并行子任务，并要求中途一旦发现关键信息即回写 `CONTEXT_SHARE`：\n- `SUB-A / GPT`：盘点 `ramp/policies/`、`scheduler/`、`runtime/`、相关 tests，输出算法族谱、入口、关键运行时依赖、测试覆盖。\n- `SUB-B / Sonnet`：盘点 `ramp/scenarios/`、`experiments/`、`tools/`，输出场景矩阵、实验脚本、产物文件、场景到实验的映射链。\n- `SUB-C / Gemini`：核对 `Baseline_and_comparative_trials.html/json` 与 `STRONGA_算法交付验收文档.md`，输出被正式提及的算法/实验、验收口径，以及与代码现状的偏差线索。\n- `SUB-D / Opus`：主 Agent 负责交叉整合，持续共享关键信息，并在三条子线完成后汇总为 `reference/ramp_inventory/` 下的初版清单文档。\n本 step 的直接产物不是迁移实现，而是“算法-场景-实验”全景清单及其证据链接。请三位审阅者审阅是否可以执行。"
+    },
+    {
+      "agent": "GPT",
+      "type": "REVIEW",
+      "time": "2026-03-30 23:07:35",
+      "content": "结论：Conditional Approve\n- 分工覆盖代码、场景、文档三条线，基于 Step-0 schema 后具备可执行性。\n- 建议先锁定 SUB-A/SUB-B 边界，避免 `experiments/tools` 与运行时依赖出现重复或漏盘。\n- SUB-C 的偏差线索应强制“来源文件/位置 + 原文摘录 + 对应代码锚点”的证据三元组。\n- SUB-D 汇总时需保证未知项显式标注 `unknown`，并附版本/更新时间。\nVOTE: approve"
+    },
+    {
+      "agent": "Sonnet",
+      "type": "REVIEW",
+      "time": "2026-03-30 23:07:35",
+      "content": "结论：Conditional Approve\n- 按代码域、场景域、文档验收域拆分合理，`SUB-D` 只做交叉整合也符合依赖方向。\n- 先锁定统一最小产出粒度：对象 ID、入口/脚本路径、证据来源、缺口结论。\n- `SUB-B` 与 `SUB-C` 需共享同一命名映射表，避免场景/实验别名错配。\n- `SUB-A` 的测试覆盖结论仅盘点现状，不做超出证据的推断。\nVOTE: approve"
+    },
+    {
+      "agent": "Gemini",
+      "type": "REVIEW",
+      "time": "2026-03-30 23:07:35",
+      "content": "结论：Approve\n- 任务拆分清晰，SUB-A/B/C 与 SUB-D 的职责分层合理。\n- 建议额外标记隐式依赖，如硬编码路径、潜在循环依赖。\n- 最终汇总建议补一张“验收口径 -> 场景映射 -> 测试覆盖”的追溯表。\nVOTE: approve"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-03-30 23:07:35",
+      "content": "【Step-1 执行门禁收敛】\n执行前补充以下强制约束：\n- `SUB-A` 只负责算法代码、运行时依赖、tests 现状；`SUB-B` 只负责场景/实验/产物链；`SUB-C` 只负责文档验收口径与代码偏差核对。\n- 三条子线统一最小产出粒度：对象 ID、路径锚点、证据来源、缺口结论。\n- `SUB-C` 的每条偏差线索必须给出证据三元组：来源位置、原文摘录、代码锚点。\n- 汇总时显式记录 `unknown`、更新时间，并补一个命名映射表避免别名错配。"
+    },
+    {
+      "agent": "GPT",
+      "type": "VOTE",
+      "time": "2026-03-30 23:07:35",
+      "content": "Step-1 投票：approve。理由：加入边界裁决和证据三元组后，可并行执行。"
+    },
+    {
+      "agent": "Sonnet",
+      "type": "VOTE",
+      "time": "2026-03-30 23:07:35",
+      "content": "Step-1 投票：approve。理由：最小产出粒度与命名映射约束已足够防止汇总口径漂移。"
+    },
+    {
+      "agent": "Gemini",
+      "type": "VOTE",
+      "time": "2026-03-30 23:07:35",
+      "content": "Step-1 投票：approve。理由：文档验收核对、隐式依赖标记和追溯矩阵需求都已纳入。"
+    },
+    {
+      "agent": "Opus",
+      "type": "VOTE",
+      "time": "2026-03-30 23:07:35",
+      "content": "Step-1 投票：approve。理由：当前已具备启动首轮 inventory 探查的全部前置条件。"
+    },
+    {
+      "agent": "Opus",
+      "type": "EXECUTION",
+      "time": "2026-03-30 23:07:35",
+      "content": "【Step-1 执行通过】\n4/4 赞成。现在启动三条并行分析子任务，主 Agent 同步维护 forum 与中途 CONTEXT_SHARE。最终目标是产出 `reference/ramp_inventory/` 下的初版算法-场景-实验清单。"
+    },
+    {
+      "agent": "GPT",
+      "type": "SUBTASK_RESULT",
+      "time": "2026-03-30 23:10:47",
+      "content": "### 总览\n- `ramp/experiments/run.py` 是仿真主循环与策略编排入口，`--policy` 仅支持 `no_control`、`fifo`、`dp`、`hierarchical` 四种。\n- 每仿真步由 `StateCollector` / `HierarchicalStateCollector` 采集状态，再进入各 `policies/*/scheduler.py` 生成 `Plan`，由 `command_builder.py` 转成 `ControlCommand`，最后 `runtime/controller.py` 用 TraCI 下发。\n- 纯数值内核集中在 `scheduler/dp.py`、`scheduler/dp_mixed.py`、`scheduler/arrival_time.py`；分层策略拆成 Zone A / Zone B / Zone C。\n- 固定/灵活合流点不是两套独立算法，而是 `HierarchicalScheduler` 通过 `merge_policy` 调整 `MergePointParams.search_start_pos_m`。\n- tests 对 DP 核心与 `merge_point` 纯逻辑覆盖较多，但 `fifo` / `no_control` / `command_builder` / `Controller` / `run.py` 基本无专属单测。\n\n### 结构化清单（摘要）\n- `ALG-NC-001`：`policies/no_control/*`，空控制基线，专属测试缺失，confidence=medium。\n- `ALG-FIFO-001`：`policies/fifo/*`，依赖 `entry_order`、`fifo_target_time` 等状态字段，专属测试缺失，confidence=medium。\n- `ALG-DP-001`：`policies/dp/scheduler.py` + `scheduler/dp.py`，纯 CAV 双流 DP，`test_dp_schedule.py` 覆盖内核，confidence=high。\n- `SCH-DPMIX-001`：`scheduler/dp_mixed.py`，混合 CAV/HDV DP，`test_dp_mixed.py` 覆盖，confidence=high。\n- `ALG-HIER-001`：`policies/hierarchical/scheduler.py`，A/B/C 分层编排；Zone A 在 `zone_a.py`，Zone C 在 `merge_point.py`；`test_hierarchical_scheduler.py` 仅覆盖构造与参数，行为级覆盖不足。\n- `RT-SC-001` / `RT-HSC-001` / `RT-CTRL-001`：`runtime/state_collector.py`、`policies/hierarchical/state_collector_ext.py`、`runtime/controller.py`，均强绑定 TraCI 和路网名，是迁移纯数值验证时最需要切断的运行时耦合点。\n\n### 高风险迁移依赖 / 未决问题\n- 大量硬编码路网名：如 `main_h2`、`main_h3`、`main_h3_0`、`:n_merge`，分布在 `controller.py`、`zone_a.py`、`state_collector_ext.py`、`hierarchical/scheduler.py`。\n- `state_collector_ext.py` 存在静默异常吞掉的路径，可能导致 Zone A/C 数据缺失却不暴露。\n- `HierarchicalScheduler.compute_plan` 依赖 TraCI 取加速度、车道列表，当前缺少端到端自动化测试。"
+    },
+    {
+      "agent": "Sonnet",
+      "type": "SUBTASK_RESULT",
+      "time": "2026-03-30 23:10:47",
+      "content": "### 总览\n- 主实验入口是 `ramp/experiments/run.py`；按 `--scenario` 选择 `ramp/scenarios/<scenario>/<scenario>.sumocfg`，默认输出到 `output/<scenario>/<policy>/`。\n- 运行期会写 `metrics.json`、`config.json`、`control_evidence.csv`、`contract_evidence.csv`、`feedback_evidence.csv` 等，证据链逻辑在 `experiments/evidence_chain.py`。\n- `summarize_metrics.py` 递归汇总 `metrics.json`，可生成 `summary.json` / `summary.md`；`run_pain_matrix.py` 会批量调用 `run.py` 产出 `pain_matrix_summary.json`。\n- 关键场景包括：`ramp_min_v1`、`ramp__mlane_v2`、`ramp__mlane_v2_mixed`、`ramp__mlane_v2_mixed_hf`、`ramp__mlane_v2_mixed_stress`。\n- `mixed` / `hf` / `stress` 主要区别在 `rou_meta.json` 的流量配置；`hf`、`stress` 更接近扩展压力实验。\n\n### 场景-实验关系链（摘要）\n- `CHAIN-01`：`ramp_min_v1` -> `run.py` -> `output/ramp_min_v1/<policy>/metrics.json`，适合最小可复现回归。\n- `CHAIN-02`：`ramp__mlane_v2` -> `run.py` -> StageA 多车道基础场景；有 `STAGEA_CONTRACT_CHECKLIST.md`。\n- `CHAIN-03`：`ramp__mlane_v2_mixed` -> `run.py` / `generate_mixed_rou.py` -> mixed 标准强度基准，`rou_meta.json` 提供流量与渗透率元数据。\n- `CHAIN-04` / `CHAIN-05`：`mixed_hf` / `mixed_stress` -> 同一实验链路 -> 更高流量扩展对比。\n- `CHAIN-06`：多场景输出目录 -> `summarize_metrics.py` -> `summary.json` / `summary.md`，用于联合指标汇总。\n- `CHAIN-07`：默认 `ramp__mlane_v2_mixed` -> `run_pain_matrix.py` -> `output/pain_matrix/pain_matrix_summary.json`。\n\n### 典型实验候选\n- mixed 标准场景上的 `no_control / fifo / dp / hierarchical` 基准与对比实验。\n- `mixed_hf` 与 `mixed_stress` 上的高流量/高压扩展实验，当前文档更强调 `no_control vs hierarchical`。\n- `ramp_min_v1` 上的最小回归实验，适合作为迁移后的数值验证门禁。\n- `run_pain_matrix.py` 代表的 HDV / pain score 矩阵实验。\n\n### 命名别名 / 断裂点\n- `ramp__mlane_v2` 目录下同时存在 `ramp__mlane_v2.sumocfg` 与 `ramp__mlane_v2_mixed.sumocfg`，但 `run.py` 只加载与 `scenario` 同名的 sumocfg，后者在当前代码路径下不会自动被命中。\n- `run_pain_matrix.py` 默认 `merge_edge=main_h3`，而 `run.py` 默认 `main_h4`，跨实验比较时存在配置不一致风险。\n- 仓库根 `Baseline_and_comparative_trials.html/json` 不是 `summarize_metrics.py` 直接生成的产物，不能直接视为 ramp 内实验汇总脚本的输出。"
+    },
+    {
+      "agent": "Gemini",
+      "type": "SUBTASK_RESULT",
+      "time": "2026-03-30 23:10:47",
+      "content": "### 总览\n- `docs/STRONGA_算法交付验收文档.md` 是正式交付/验收口径，覆盖 Strong A v1.0、场景命令、三 seed 指标表、公式与材料清单。\n- `Baseline_and_comparative_trials.json` / `.html` 实际上是 2026-03-16 的多 Agent 讨论线程，不是最终数值型实验结果总表。\n- 论坛线程与验收文档在若干核心指标数值上相互引用且基本一致，但语义上应区分“过程讨论”与“正式验收”。\n- 论坛明确指出 Fixed 基线本质是晚启动搜索，而不是独立固定锚点算法；这一点能在 `hierarchical/scheduler.py` + `merge_point.py` 中对上。\n- `MergeContract` 运行时类型不含 `expected_merge_position_m`；期望位置由 `evidence_chain.expected_merge_position_m()` 和常量 `FLEXIBLE_POSITION_OFFSET_M=20.0` 填入证据链。\n- 论坛曾投票要求将协同 `Δv=1 m/s` 改为动态，但验收文档和代码中仍是 `1.0`，体现出版本/口径差。\n\n### 正式提及项（摘要）\n- 算法/版本：Strong A v1.0、`hierarchical` + `strong_a_v1`，方案 B 明确未纳入 v1.0。\n- 场景与命令：`ramp__mlane_v2_mixed`，三 seed（42/123/999），`duration-s 120`、`cav-ratio 0.5`、`main-vph 1500`、`ramp-vph 500` 等。\n- 验收结果：collision、chain_complete、fallback、contract_realization、merge_window_hit、predecessor_follower_match 等表格指标。\n- 论坛专项：A1-A7 完成冻结；Todo 4.3 未开始；Fixed 重设计与 Q1/Q2 假设仍属过程讨论。\n\n### 偏差线索（附证据）\n- `OBJ-FIX-01`：论坛说 Fixed 不是独立固定锚点，代码中确实只是 `search_start_pos_m` 调整到约 259m；`deviation_type=flow_gap`。\n- `OBJ-CON-02`：论坛要求 `MergeContract` 增加空间语义字段，但当前 `runtime/types.py` 不含该字段，实验写 CSV 时仍由 `evidence_chain` 按 policy 推导；`deviation_type=flow_gap/parameter_drift`。\n- `OBJ-EVD-03`：`evidence_chain.py` 中 `FLEXIBLE_POSITION_OFFSET_M = 20.0`，反映 flexible 期望合流位置硬编码；`deviation_type=parameter_drift`。\n- `OBJ-COOP-04`：论坛投票要把 Δv 改动态，但 `hierarchical/scheduler.py` 里 `_COOP_DELTA_V_MPS = 1.0`，验收文档也写 1m/s；`deviation_type=parameter_drift`。\n- `OBJ-MET-06`：验收文档中 p75 gap 对齐速度 23.68 -> 19.11 的说法，当前仓库内未直接找到对应产物锚点，属于 `result_unverifiable`。\n\n### 证据可信度分层\n- 高可信主证据：`STRONGA_算法交付验收文档.md`、`ramp/experiments/run.py`、`ramp/experiments/evidence_chain.py`、`ramp/policies/hierarchical/scheduler.py`、`ramp/policies/hierarchical/merge_point.py`、`ramp/runtime/types.py`。\n- 低可信旁证：`Baseline_and_comparative_trials.html`（展示层）、论坛中的工时/路线讨论。\n- 未决问题：p75 指标的可复算产物路径、Q1/Q2 是否落到其他任务文档、`strong_a_v1` 参数映射是否需要再做一张命令行到行为的表。"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-03-30 23:10:47",
+      "content": "【交叉收敛快照】\n当前三条子线已经形成可用于 inventory 的第一版主干：\n- 算法侧已确认四大主策略：`no_control`、`fifo`、`dp`、`hierarchical`，以及 `Zone A / dp_mixed / MergePointManager` 等子模块。\n- 场景侧已确认基础场景 `ramp_min_v1`、`ramp__mlane_v2`，以及三类 mixed 场景：标准 / hf / stress；`run.py`、`summarize_metrics.py`、`run_pain_matrix.py` 构成主要实验链。\n- 文档侧已确认：`STRONGA_算法交付验收文档.md` 是正式验收主证据，而 `Baseline_and_comparative_trials.html/json` 更像过程讨论记录，不应误当最终实验汇总。\n- 目前最值得优先写入 inventory 的偏差包括：Fixed 只是在参数上改变搜索起点、`expected_merge_position_m` 仍由 evidence 层硬编码、Δv 动态化决议未反映到代码/验收文档、部分结果缺乏直接产物锚点。"
+    },
+    {
+      "agent": "Opus",
+      "type": "PROPOSAL",
+      "time": "2026-03-30 23:11:16",
+      "content": "【Step-2 提案：将首轮分析落为轻量 inventory 文档】\n建议只创建 4 个工作文档，避免一开始就过度设计：\n1. `reference/ramp_inventory/README.md`：范围、证据优先级、术语、命名映射和总导航。\n2. `reference/ramp_inventory/algorithms.md`：算法族谱、代码入口、关键依赖、现有 tests、迁移切断点。\n3. `reference/ramp_inventory/scenarios_and_experiments.md`：场景矩阵、实验脚本、产物链、典型实验候选。\n4. `reference/ramp_inventory/evidence_and_gaps.md`：正式文档主证据、过程讨论旁证、偏差线索、未决问题。\n这一步只整理现状，不设计新架构，不写迁移方案，不改顶层 `docs/design.md` / `docs/contracts.md`。请三位审阅者判断这组落盘是否足够轻且信息闭合。"
+    },
+    {
+      "agent": "GPT",
+      "type": "REVIEW",
+      "time": "2026-03-30 23:13:25",
+      "content": "结论：Conditional Approve\n- 四份文档分工清晰，覆盖“入口 -> 证据 -> 缺口”的盘点链路。\n- 建议统一证据元数据：来源路径/章节、时间戳、置信级别。\n- 需定义 `algorithms.md` 与 `scenarios_and_experiments.md` 的去重与交叉索引规则。\n- `evidence_and_gaps.md` 建议标明缺口优先级。\nVOTE: approve"
+    },
+    {
+      "agent": "Sonnet",
+      "type": "REVIEW",
+      "time": "2026-03-30 23:13:25",
+      "content": "结论：Conditional Approve\n- 拆分遵循“总导航 / 算法清单 / 场景实验 / 证据缺口”，结构合理。\n- `evidence_and_gaps.md` 必须强制区分正式证据、过程旁证、推测线索、未决问题。\n- 术语、命名映射、证据优先级应只在 `README.md` 维护为单一真源，其余文档引用。\nVOTE: approve"
+    },
+    {
+      "agent": "Gemini",
+      "type": "REVIEW",
+      "time": "2026-03-30 23:13:25",
+      "content": "结论：Approve\n- 当前边界安全，只整理现状、不触碰顶层设计文档。\n- `algorithms.md` 保留依赖与 tests 信息，对后续迁移和验证价值高。\n- `evidence_and_gaps.md` 能有效防止隐性知识流失。\nVOTE: approve"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-03-30 23:13:25",
+      "content": "【Step-2 落盘门禁收敛】\n执行前补充：\n- 证据元数据统一包含：来源路径、证据等级、更新时间。\n- 稳定 ID 与命名映射仅在 `README.md` 维护；其他文档用 ID 交叉引用。\n- `evidence_and_gaps.md` 强制分层：正式证据 / 过程旁证 / 推测线索 / 未决问题，并为缺口标记优先级。"
+    },
+    {
+      "agent": "GPT",
+      "type": "VOTE",
+      "time": "2026-03-30 23:13:25",
+      "content": "Step-2 投票：approve。理由：补上证据元数据与去重规则后，可以稳定落盘。"
+    },
+    {
+      "agent": "Sonnet",
+      "type": "VOTE",
+      "time": "2026-03-30 23:13:25",
+      "content": "Step-2 投票：approve。理由：README 作为单一术语/命名真源后，其余文档职责清晰。"
+    },
+    {
+      "agent": "Gemini",
+      "type": "VOTE",
+      "time": "2026-03-30 23:13:25",
+      "content": "Step-2 投票：approve。理由：现有证据与缺口信息已足够支撑第一版 inventory 文档。"
+    },
+    {
+      "agent": "Opus",
+      "type": "VOTE",
+      "time": "2026-03-30 23:13:25",
+      "content": "Step-2 投票：approve。理由：当前适合将分析结果整理为轻量、可继续演化的 inventory。"
+    },
+    {
+      "agent": "Opus",
+      "type": "EXECUTION",
+      "time": "2026-03-30 23:13:25",
+      "content": "【Step-2 执行通过】\n4/4 赞成。现在开始在 `reference/ramp_inventory/` 下创建 4 个 inventory 文档，作为迁移前盘点基线。"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-03-30 23:19:13",
+      "content": "【执行恢复】\n本轮从中断处恢复。Step-2 已在上一轮通过并进入执行，当前 `reference/ramp_inventory/` 下已完成 `README.md`，接下来继续落 `algorithms.md`、`scenarios_and_experiments.md`、`evidence_and_gaps.md`，不重新发起新的设计讨论。"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-03-30 23:29:25",
+      "content": "【Step-2 执行结果】\n`reference/ramp_inventory/` 下的 4 份基线文档现已齐全：`README.md`、`algorithms.md`、`scenarios_and_experiments.md`、`evidence_and_gaps.md`。本轮只整理现状，不触碰顶层设计文档。已完成存在性检查，且 `ReadLints` 未发现问题。后续如果继续推进，可直接在这 4 份 inventory 的基础上讨论迁移边界与纯数值验证模型。"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-04-01 21:53:36",
+      "content": "【当前归档边界】\n用户要求把已经讨论好的内容正式整理归档，不继续扩张讨论范围。当前准备落 3 份文档：`docs/design.md`、`docs/formulas.md`、`docs/derivations.md`。其中 design 只写主线定义、系统边界和建模约束；公式单独成文；证明/推导再单独成文。`contracts.md` 暂不更新，因为统一输入输出协议与模块契约还未完全冻结。"
+    },
+    {
+      "agent": "Opus",
+      "type": "PROPOSAL",
+      "time": "2026-04-01 21:53:36",
+      "content": "【Step-3 提案：归档单匝道数值验证设计】\n本 step 只整理此前已经讨论达成的内容，不新增算法范围：\n1. 重写 `docs/design.md`，把世界模型、merge zone、completion anchor、baseline / 分层算法 MVP 的定义写清楚。\n2. 新增 `docs/formulas.md`，集中放运动学模型、Krauss 风格安全速度、gap 约束、completion anchor 与 `T_lc(v)` 相关公式。\n3. 新增 `docs/derivations.md`，集中放关键公式的推导与为什么这么定义。\n4. 三份文档互相引用，但不把还没冻结的统一接口、实验参数细节写死。\n当前不调用 reviewer，因为这一步是归档现有共识，不是探索新方案。若归档过程中发现边界矛盾，再单独发起 QA 或审阅。"
+    },
+    {
+      "agent": "Opus",
+      "type": "EXECUTION",
+      "time": "2026-04-01 21:53:36",
+      "content": "【Step-3 执行开始】\n按“design 主线 / formulas 公式 / derivations 推导”三份文档归档当前共识，不扩张未冻结内容。"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-04-01 22:07:26",
+      "content": "【Step-3 执行结果】\n已按“少量多次保存”的方式完成本轮归档：`docs/design.md` 重写为单匝道数值验证设计主线，新增 `docs/formulas.md` 与 `docs/derivations.md`，并在三份文档之间建立引用关系。当前只整理已讨论共识，不扩张统一接口与实验参数等未冻结内容。已完成存在性检查，且 `ReadLints` 未发现问题。"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-04-02 22:18:14",
+      "content": "【时步闭环协议讨论】\n用户确认：`fixed / flexible` 统一绑定 completion anchor 的语义是对的；`no_control` 不再作为 baseline，只保留为参考下界。当前正在讨论两件事：1) MVP 是否需要纵向分区；2) 如何冻结时步闭环协议。当前主张是：MVP 仍建议保留纵向分区，但不沿用旧 `ramp` 的 Zone A/B/C 语义，而改成几何区 + 执行状态机的轻量闭环。"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-04-02 22:50:28",
+      "content": "【纵向分区与闭环协议收敛】\n- `no_control` 不再作为 baseline，只保留为参考下界。\n- 纵向分区需要保留，但不沿用旧 `ramp` 的 Zone A/B/C 语义；建议改成几何区（control / legal merge / post-merge）+ 独立执行状态机。\n- 未来上游换道区语义上应属于更大的 control zone，但 MVP 阶段只保留“observe-only upstream subzone”或暂不启用，不把其纳入主动控制。\n- 匝道侧需要显式区分：不可开始变道的 approach 子区，与允许开始并完成变道的 legal merge zone。\n- activation 不建议在“区域激活”和“时间到达激活”中二选一，而建议采用：区域门控 + 时间到达优先级。\n- Step2 与 Step3 不建议合并成同一个黑箱优化器：MVP 阶段 Step2 可先做候选生成/打分，Step3 作为共享 feasibility checker 和 acceptance gate，保证 baseline 与后续分层算法共用同一安全语义。\n- `COMMITTED` 不应理解为永不改变，而应理解为“MVP 阶段硬锁定；未来混合流阶段可扩展为带解散/重新承诺条件的软锁定机制”。\n- MVP 最小实现建议：单个 active decision partition、fixed vs flexible 两个 baseline、FIFO 顺序、统一 feasibility checker、输出单一参考速度轨迹。"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-04-05 16:37:31",
+      "content": "【当前已冻结共识】\n- 纵向分区保留，并按绝对里程定义。\n- 匝道分区当前冻结为：`ramp_approach_subzone = [0, 50m)`、`legal_merge_zone = [50m, 290m]`、`emergency_tail = [290m, 300m]`。\n- `control zone` 保留，但需拆成子区；未来上游换道区语义上属于更大的 `control zone`。\n- MVP 只做 1 个活跃决策单元。\n- Step 2 与 Step 3 不合并；Step 3 绝不改方案，只做验收。\n- MVP baseline 先做 `FIFO + fixed anchor` 与 `FIFO + flexible anchor`。\n- `COMMITTED` 不需要稳定窗口；MVP 中一旦通过 acceptance gate 就锁定。\n- `DECOMMIT` 不进入 MVP 实现，但必须在 design 中作为 future extension 明确写清。"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-04-05 16:44:31",
+      "content": "【Step-3 acceptance gate 收敛】\n- MVP 阶段 acceptance gate 不应只检查单一时刻，而应检查整个 lane-change 区间；但为了可实现性，先采用“整段离散采样 + 关键端点强约束”，不做 full 2D 连续碰撞优化。\n- Step 3 的职责冻结为共享验收门：只返回 `ACCEPT` 或 `REJECT(reason)`，绝不修改 Step 2 的方案。\n- 建议的验收门分为：几何/时序一致性、目标 gap 身份与顺序一致性、执行期整段安全、并入后短时稳定安全、动力学边界、协同对象一致性。\n- 若某候选被 REJECT，系统只能让 Step 2 尝试下一个候选；若所有候选均失败，则输出 `NO_FEASIBLE_PLAN`，不允许 Step 3 变成兜底 planner。\n- 若后续发现 Step 3 拒绝率过高，应收紧 Step 2 的候选生成或评分逻辑，而不是赋予 Step 3 重规划权。"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-04-05 17:02:10",
+      "content": "【Step-2 候选生成收敛】\n- 规划对象冻结为：每个 planning tick 只为“匝道最靠前、且未 `COMMITTED/EXECUTING` 的 ramp CAV”生成候选，形成 ramp-side FIFO。\n- `fixed anchor` 的候选集合是单点：`X_fixed = {170}`；`flexible anchor` 的候选集合是 legal merge zone 内所有整数 completion anchor：`X_flex = {x_m \\in \\mathbb{Z} \\mid \\lceil x_lb(v_r) \\rceil \\le x_m \\le 290}`。\n- 每个 `x_m` 下不枚举多个 gap，而是先计算 ramp 车的自由到达时刻 `t_r^free(x_m)`，再把它插入“target-lane ordered objects”的到达序列中，导出该 `x_m` 下唯一的 FIFO gap；这里的 ordered objects 包含主路车，以及会在目标车道形成先后约束的已锁定对象。\n- FIFO 的语义冻结为“按自由到达优先级排队”，不是“在同一 anchor 下向后回退寻找更晚 gap”；若该 FIFO gap 不可行，则该 `x_m` 本 tick 无候选，这种向后回退能力留给后续 DP / 分层算法，而不是留给 FIFO baseline。\n- 候选粗时间窗写为 `L(x_m) = max(t_r^free(x_m), t_p(x_m)+h_pr)`、`U(x_m) = t_f(x_m)-h_rf`；仅当 `L \\le U` 时生成候选，并取 `t_m = L`。边界 gap 用空前驱/空后继哨兵处理；若 `|t_r^free - t_i| \\le \\varepsilon_t`，统一按“mainline / 已锁定对象优先，ramp 后插”的 tie-break 处理。\n- 候选排序目标改为字典序：先最小化 `t_m`，再最小化 `\\Delta_delay = t_m - t_r^free(x_m)`，最后最小化 `x_m`。这样避免 flexible 因相对延迟定义而系统性偏向下游 anchor。\n- Step 2 必须在同一个 snapshot 上一次性生成完整有序 `candidate list`；Step 3 只在该列表上做 `accept/reject + index++`，不重算预测。若全失败，则本 tick 输出 `NO_FEASIBLE_PLAN`，车辆继续执行安全纵向跟驰/等待；若逼近 `emergency_tail` 仍无计划，则转入 fail-safe 停车/记 abort。"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-04-05 17:16:21",
+      "content": "【inventory 同步完成】\n- `reference/ramp_inventory/README.md` 已补充“设计输入提炼层”，明确区分旧系统盘点、已确认设计输入、以及仍待冻结的 `OPEN-*` 问题。\n- `algorithms.md` 已归档新仓库 MVP 的算法口径：`no_control` 仅为参考下界；首批 baseline 为 `FIFO + fixed anchor` 与 `FIFO + flexible anchor`；MVP 只允许 1 个 `active decision partition`；`Step 2`/`Step 3` 明确分离。\n- `scenarios_and_experiments.md` 已归档新仓库场景骨架：单主线单匝道单冲突区、匝道三段式子区、上游换道 observe-only，以及三类首轮实验骨架。\n- `evidence_and_gaps.md` 已新增 `DEC-*` 设计提炼项，并把后续必须继续冻结的四块问题列为 `OPEN-CONTRACT-MVP`、`OPEN-TIME-DISCRETIZATION`、`OPEN-PARAM-FREEZE`、`OPEN-EXPERIMENT-GATES`。"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-04-05 17:16:21",
+      "content": "【四块未冻结项的当前建议】\n- `common I/O contract`：建议把 planner 输出拆成 `PlanningSnapshot -> CandidatePlan -> AcceptedPlan/CommittedPlan` 三层。`CandidatePlan` 至少包含：`snapshot_id`、`candidate_id`、`policy_tag`、`ego_id`、`target_gap(pred_id,foll_id)`、`x_m`、`t_m`、`t_r^free`、`partner_ids`、`objective_tuple`、以及导出缓存 `tau_lc/x_s`。`REJECT(reason)` 建议冻结为：`REJECT_ZONE`、`REJECT_TIMING`、`REJECT_GAP_IDENTITY`、`REJECT_INTERVAL_SAFETY`、`REJECT_POST_MERGE_SAFETY`、`REJECT_DYNAMIC_LIMIT`、`REJECT_PARTNER_INVALID`。`COMMITTED` 后锁定的语义字段建议是：`ego_id`、`pred_id`、`foll_id`、`x_m`、`t_m`、`partner_ids`、`sequence_relation`；`tau_lc/x_s` 可作为派生缓存，不视为独立决策变量。\n- `time discretization`：建议 MVP 统一采用 `rollout_tick = 0.1s`、`planning_tick = 0.1s`、`gate_sampling_dt = 0.1s`。理由是与旧 `ramp`/SUMO 默认 `step-length=0.1` 保持一致，并避免 `planning_tick > rollout_tick` 带来的 snapshot 混叠。Step 3 除了整段 `0.1s` 采样外，再强制检查 `tau_lc`、`t_m` 和 `t_m+1.0s` 的短时稳定端点。\n- `参数层`：建议把旧系统中可对齐的数值作为 MVP 默认值：`a_max = 2.6 m/s^2`、`|a_fail_safe| = 4.5 m/s^2`、`tau = 1.0 s`、`minGap = 2.5 m`。`h_pr`、`h_rf` 建议分别冻结为 `1.5s` 与 `2.0s`，与旧 `delta_1/delta_2` 口径一致且体现 rear gap 更保守。`T_lc(v)` 建议用物理下界参数冻结为一个近常值实现：取 `W = 3.2 m`、`v_y,max = 2.4 m/s`、`a_y,max = 2.2 m/s^2`、`j_y,max = 8.0 m/s^3`、`alpha = 1.05`，得到 `T_lc ≈ 3.0 s`；MVP 实现可先用该数值，post-MVP 再恢复显式速度相关函数。\n- `实验门禁`：首轮 3 个实验建议冻结为：1) 轻负荷正确性，要求 `completion_rate = 100%`、`abort_rate = 0`、`collision/safety violation = 0`，且 `planned-actual` 时间/位置误差受控；2) 中高负荷竞争，要求 `FIFO-flexible` 在不牺牲安全与 `abort_rate` 的前提下，平均 ramp delay 不劣于 `FIFO-fixed`；3) `CAV ratio / cooperation scope` 消融，要求高渗透率与更大局部协同时性能不退化，低渗透率下性能平滑退化但不出现系统性不可行。"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-04-05 17:54:51",
+      "content": "【MVP 文档补齐完成】\n- `docs/design.md` 已正式收紧到第一波 MVP 口径：补齐了第一波/第二波边界、匝道三段式子区、`active decision partition`、`Step 2 -> Step 3 -> COMMIT/WAIT/FAIL-SAFE` 闭环、共享 acceptance gate、以及 3 类实验门禁。\n- `docs/contracts.md` 已从空模板补成第一波统一契约：定义了 `PolicyTag`、`ExecutionState`、`RejectReason`、`CommitState`，以及 `ScenarioConfig`、`PlanningSnapshot`、`CandidatePlan`、`GateResult`、`CommittedPlan`、`ExperimentResultSummary` 和模块接口签名。\n- `docs/formulas.md` 已扩展到实现前公式层：补了 `X_fixed/X_flex`、FIFO gap 导出、`L/U` 粗时间窗、共享 gate 谓词、统一时离散、以及 `T_lc^{MVP}`、`h_pr/h_rf`、fail-safe 等第一波默认参数。\n- `docs/derivations.md` 已补充关键理由链：为什么 `Step 2/Step 3` 必须分离、为什么 FIFO 不在同一 `x_m` 下回退搜更晚 gap、为什么 `COMMITTED` 只锁语义字段、为什么 `0.1s` 时离散与当前 `h_pr/h_rf/T_lc^{MVP}` 是合理第一波默认值。\n- `reference/ramp_inventory/evidence_and_gaps.md` 已同步：`OPEN-CONTRACT-MVP`、`OPEN-TIME-DISCRETIZATION`、`OPEN-PARAM-FREEZE`、`OPEN-EXPERIMENT-GATES` 不再作为未决问题，而是转成已收敛到正式文档的已关闭项。"
+    },
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-04-05 18:02:20",
+      "content": "【文档目录入口完成】\n- 已在项目根目录新增 `README.md`，作为当前仓库的文档入口与渐进式披露导航。\n- 该 README 参考 workspace `.cursor/README.md` 的组织方式，明确区分了三层：`docs/` 正式真源、`reference/ramp_inventory/` 旧系统证据层、`forum/` 过程归档层。\n- README 中已给出 4 条阅读路径：快速了解项目、开始第一波代码骨架、追溯旧系统证据、追溯冻结原因；并明确指出当前不建议一上来就读 `forum/` 或旧 `ramp` 代码全文。\n- README 还补了“如何借这套目录开始搭第一波代码骨架”的进入顺序：`design -> contracts -> formulas -> derivations -> inventory`，并把实现起点收敛到共享类型层、场景配置层、snapshot/Step 2、acceptance gate、rollout、实验门禁这几步。"
+    }
+  ]
+}

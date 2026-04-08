@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forum · t8_micro_scenarios_impl - A 层微场景实现</title>
+<style>
+  :root {
+    --bg:#f0f2f5; --card:#fff; --border:#dadce0; --text:#202124; --sec:#5f6368;
+    --sonnet:#5c6bc0; --sonnet-bg:#e8eaf6;
+    --gpt:#00897b;   --gpt-bg:#e0f2f1;
+    --opus:#7b1fa2;  --opus-bg:#f3e5f5;
+    --gemini:#f57c00;--gemini-bg:#fff3e0;
+    --mono:'SFMono-Regular',Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+    background:var(--bg);color:var(--text);line-height:1.65;font-size:15px}
+  .page{max-width:920px;margin:0 auto;padding:24px 20px 60px}
+  .header{background:var(--card);border-radius:12px;padding:24px 28px;
+    margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);border:1px solid var(--border)}
+  .header h1{font-size:1.45rem}
+  .header .meta{color:var(--sec);font-size:13px;margin-top:8px}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:16px;
+    padding:10px 16px;background:var(--card);border-radius:8px;
+    border:1px solid var(--border);font-size:13px}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .thread{display:flex;flex-direction:column;gap:14px}
+  .msg{display:flex;gap:16px;background:var(--card);border-radius:12px;
+    padding:18px 22px;box-shadow:0 1px 4px rgba(0,0,0,.06);
+    border:1px solid var(--border);border-left:4px solid var(--border)}
+  /* 左侧色条：type 优先 */
+  .msg.proposal       {border-left-color:#1a73e8}
+  .msg.context-share  {border-left-color:#26a69a;background:#f0fffe}
+  .msg.subtask-result {border-left-color:#8d6e63;background:#fdf8f5}
+  .msg.reply          {border-left-color:#9e9e9e}
+  .msg.vote           {border-left-color:#78909c}
+  .msg.execution      {border-left-color:#43a047}
+  .msg.qa             {border-left-color:#fb8c00}
+  /* 兜底按 agent */
+  .msg.sonnet {border-left-color:var(--sonnet)}
+  .msg.gpt    {border-left-color:var(--gpt)}
+  .msg.opus   {border-left-color:var(--opus)}
+  .msg.gemini {border-left-color:var(--gemini)}
+  .msg-avatar{flex-shrink:0;width:42px;height:42px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:13px;color:#fff}
+  .msg.sonnet .msg-avatar{background:var(--sonnet)}
+  .msg.gpt    .msg-avatar{background:var(--gpt)}
+  .msg.opus   .msg-avatar{background:var(--opus)}
+  .msg.gemini .msg-avatar{background:var(--gemini)}
+  .msg.context-share  .msg-avatar{background:#26a69a}
+  .msg.subtask-result .msg-avatar{background:#8d6e63}
+  .msg-body{flex:1;min-width:0}
+  .msg-head{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+  .msg-user{font-weight:700;font-size:14px}
+  .msg.sonnet .msg-user{color:var(--sonnet)}
+  .msg.gpt    .msg-user{color:var(--gpt)}
+  .msg.opus   .msg-user{color:var(--opus)}
+  .msg.gemini .msg-user{color:var(--gemini)}
+  .msg-tag{font-size:11px;padding:2px 8px;border-radius:10px;
+    background:#f1f3f4;color:var(--sec)}
+  .msg.context-share  .msg-tag{background:#e0f2f1;color:#00695c}
+  .msg.subtask-result .msg-tag{background:#efebe9;color:#4e342e}
+  .msg.execution      .msg-tag{background:#e8f5e9;color:#2e7d32}
+  .msg.qa             .msg-tag{background:#fff3e0;color:#e65100}
+  .msg.proposal       .msg-tag{background:#e8f0fe;color:#1557b0}
+  .msg-time{font-size:12px;color:var(--sec);margin-left:auto}
+  .msg-content{font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+  .msg-content strong{font-weight:600}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <h1>📋 t8_micro_scenarios_impl - A 层微场景实现</h1>
+    <div class="meta">
+      🗓 2026-04-06 &nbsp;·&nbsp; 主 Agent: Opus &nbsp;·&nbsp; 审阅: GPT, Sonnet, Gemini
+      &nbsp;·&nbsp; 📄 t8_micro_scenarios_impl.json
+    </div>
+  </div>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--sonnet)"></span>Sonnet</span>
+    <span><span class="dot" style="background:var(--gpt)"></span>GPT</span>
+    <span><span class="dot" style="background:var(--opus)"></span>Opus</span>
+    <span><span class="dot" style="background:var(--gemini)"></span>Gemini</span>
+    <span><span class="dot" style="background:#26a69a"></span>CONTEXT_SHARE</span>
+    <span><span class="dot" style="background:#8d6e63"></span>SUBTASK_RESULT</span>
+    <span><span class="dot" style="background:#1a73e8"></span>PROPOSAL</span>
+    <span><span class="dot" style="background:#43a047"></span>EXECUTION</span>
+    <span><span class="dot" style="background:#fb8c00"></span>QA</span>
+  </div>
+  <div class="thread">
+    <div class="msg context-share opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">CONTEXT_SHARE</span>
+          <span class="msg-time">2026-04-06 11:16:00</span>
+        </div>
+        <div class="msg-content">【初始 Context】<br>
+- 任务 slug：`t8_micro_scenarios_impl`<br>
+- 目标 repo：`/home/liangyunxuan/src/Sumo-Carla-simulation-for-Vehicle-Road-Cloud-Integeration/Algorithm_python`<br>
+- forum 归档路径固定为 `forum/t8_micro_scenarios_impl.json`，HTML 面板输出为同目录 `forum/t8_micro_scenarios_impl.html`<br>
+- 用户要求：严格按 `docs/features/first_wave_mvp/T8_a_layer_micro_scenarios.md` 去实现 A 层微场景实验，并真实跑 `A0/A1/A2/A3`、生成 `summary.json`、`trace.jsonl`、`analysis_report.md`<br>
+- 已阅读：多 Agent 协作协议、repo `workflow.mdc` / `project-context.mdc` / `coding-standards.mdc`、`T8_a_layer_micro_scenarios.md`<br>
+- 发现的关键约束：`T8` 明确写了“当前只改 task 文档”，白名单只有 `docs/features/first_wave_mvp/T8_a_layer_micro_scenarios.md`，黑名单覆盖 `src/first_wave_mvp/<strong>`、`experiments/first_wave_mvp/</strong>`、`tests/first_wave_mvp/<strong>`，且明确要求“不要在本轮执行任何代码实现”</strong></div>
+      </div>
+    </div>
+    <div class="msg proposal opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">PROPOSAL</span>
+          <span class="msg-time">2026-04-06 11:16:20</span>
+        </div>
+        <div class="msg-content">【Step-0 提案：先判定是否允许进入实现波次】<br>
+当前我建议不要直接改代码，而是先对“是否允许进入实现与实验执行”做一步门禁判断。<br>
+提案如下：<br>
+1. 把当前 action 定义为：是否按用户要求立即进入 `src/`、`experiments/`、`tests/` 的实现与实验执行。<br>
+2. 由于 `T8` 明确限制“本轮只改 task 文档”，且用户又要求“如果发现文档冲突或需要超白名单大改，先停下来问我”，因此默认提案是：<strong>拒绝当前直接实现</strong>，先发起 QA，让用户选择是否显式覆盖 `T8` 约束。<br>
+3. 只有在用户确认放开边界后，才进入真正的实现 step，并重新走一轮 `PROPOSAL -&gt; REVIEW -&gt; VOTE -&gt; EXECUTION`。<br>
+请三位审阅者只判断：当前是否可以直接实现，还是必须先 QA 用户。</div>
+      </div>
+    </div>
+    <div class="msg gpt gpt">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">GPT</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-06 11:17:10</span>
+        </div>
+        <div class="msg-content">结论：reject<br>
+- `T8` 明确限定“当前只改 task 文档”，白名单仅 `docs/features/first_wave_mvp/T8_a_layer_micro_scenarios.md`，直接实现会违反文档约束。<br>
+- 黑名单已覆盖 `src/first_wave_mvp/<strong>`、`experiments/first_wave_mvp/</strong>`、`tests/first_wave_mvp/<strong>`，而“真实跑 A0-A3 并产出文件”必然触达这些范围。<br>
+- 用户已明确要求：若出现文档冲突或需超白名单改动，必须先停下并发起 QA。<br>
+建议：先向用户确认是否显式解除黑白名单并授权进入代码实现与实验执行。</strong></div>
+      </div>
+    </div>
+    <div class="msg sonnet sonnet">
+      <div class="msg-avatar">S</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Sonnet</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-06 11:17:10</span>
+        </div>
+        <div class="msg-content">结论：reject<br>
+- `T8` 白纸黑字写了“不要在本轮执行任何代码实现”，而用户当前要求正是代码实现与真实实验运行。<br>
+- 当前白名单仅含 `T8` 文档本身，`src/`、`experiments/`、`tests/` 都在黑名单中，直接实现属于超边界执行。<br>
+- 用户自己定义了 QA 触发条件：发现文档冲突或超白名单时先停下来问。<br>
+建议：暂停实现，请用户在“只按 T8 修文档”和“覆盖 T8 进入实现波次”之间做明确选择。</div>
+      </div>
+    </div>
+    <div class="msg gemini gemini">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Gemini</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-06 11:17:10</span>
+        </div>
+        <div class="msg-content">结论：reject<br>
+- 用户诉求与 `T8` 规范存在直接冲突：一边要求严格按 `T8` 实现，一边要求执行 `T8` 明确禁止的代码实现与实验输出。<br>
+- 要真实跑 `A0/A1/A2/A3`，必然需要改动黑名单目录并产出新实验文件，这超出了当前文档允许的范围。<br>
+- 这正好命中用户要求的“先停下来问我”的场景。<br>
+建议：先做 QA，不应强行实施。</div>
+      </div>
+    </div>
+    <div class="msg vote gpt">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">GPT</span>
+          <span class="msg-tag">VOTE</span>
+          <span class="msg-time">2026-04-06 11:17:40</span>
+        </div>
+        <div class="msg-content">Step-0 投票：reject。理由：当前提案与 `T8` 本轮“仅文档变更”规则冲突；应先向用户确认是否显式解除白名单/黑名单并授权进入实现。</div>
+      </div>
+    </div>
+    <div class="msg vote sonnet">
+      <div class="msg-avatar">S</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Sonnet</span>
+          <span class="msg-tag">VOTE</span>
+          <span class="msg-time">2026-04-06 11:17:40</span>
+        </div>
+        <div class="msg-content">Step-0 投票：reject。理由：`T8` 明确禁止本轮代码实现，直接推进将违反 spec 与用户自定义 QA 条款。</div>
+      </div>
+    </div>
+    <div class="msg vote gemini">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Gemini</span>
+          <span class="msg-tag">VOTE</span>
+          <span class="msg-time">2026-04-06 11:17:40</span>
+        </div>
+        <div class="msg-content">Step-0 投票：reject。理由：存在严重的 spec/user 冲突，必须先由用户确认边界。</div>
+      </div>
+    </div>
+    <div class="msg vote opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">VOTE</span>
+          <span class="msg-time">2026-04-06 11:17:40</span>
+        </div>
+        <div class="msg-content">Step-0 投票：reject。理由：当前无法同时满足“严格按 T8”与“立即实现并真实跑实验”这两组互斥约束。</div>
+      </div>
+    </div>
+    <div class="msg execution opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">EXECUTION</span>
+          <span class="msg-time">2026-04-06 11:18:00</span>
+        </div>
+        <div class="msg-content">【Step-0 执行结论】<br>
+4/4 一致 reject，当前 step 的共识为：<strong>不进入代码实现</strong>。<br>
+原因不是不做，而是必须先由用户决定是否覆盖 `T8` 当前边界。<br>
+因此本 step 的执行结果为：<br>
+- 不改动 `src/first_wave_mvp/<strong>`<br>
+- 不改动 `experiments/first_wave_mvp/</strong>`<br>
+- 不改动 `tests/first_wave_mvp/<strong>`<br>
+- 转入 `QA`，等待用户明确授权路径</strong></div>
+      </div>
+    </div>
+    <div class="msg qa opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">QA</span>
+          <span class="msg-time">2026-04-06 11:18:10</span>
+        </div>
+        <div class="msg-content">【需要用户确认】<br>
+请在以下路径中二选一：<br>
+A. 继续严格遵守当前 `T8`，那我本轮只能改 `T8` 文档本身，不能实现代码、不能跑 `A0-A3`。<br>
+B. 你显式覆盖当前 `T8` 的黑白名单与“本轮不实现”限制，允许我进入 `src/`、`experiments/`、`tests/` 完成实现、测试、真实运行和结果产出。<br>
+在你确认之前，我不会越界进入实现。</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

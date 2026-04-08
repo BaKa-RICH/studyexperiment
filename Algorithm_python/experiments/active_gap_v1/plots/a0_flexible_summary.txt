@@ -1,0 +1,12 @@
+A0 Flexible 滚动闭环仿真摘要
+total_ticks=200
+merge_ticks=200
+coordination_ticks=0
+safe_wait_ticks=0
+initial_gap_ps=6.000
+final_gap_ps=60.407
+final_p_v=10.678
+final_m_v=10.239
+final_s_v=9.653
+csv=/home/liangyunxuan/src/Sumo-Carla-simulation-for-Vehicle-Road-Cloud-Integeration/Algorithm_python/experiments/active_gap_v1/plots/a0_flexible_trace.csv
+html=/home/liangyunxuan/src/Sumo-Carla-simulation-for-Vehicle-Road-Cloud-Integeration/Algorithm_python/experiments/active_gap_v1/plots/a0_flexible_timeseries.html

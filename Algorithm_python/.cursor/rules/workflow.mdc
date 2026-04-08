@@ -1,0 +1,43 @@
+---
+description: "Spec-Driven 工作流状态协议。定义落盘原则、共识信号和文档路由。所有对话自动加载。"
+alwaysApply: true
+---
+
+<!--
+Derived-From: /home/liangyunxuan/src/.cursor/templates/rules/workflow.base.mdc
+Scope: repo-instance
+Drift-Allowed: true
+Backport: manual
+-->
+
+# Spec-Driven 工作流
+
+## 适用范围
+
+本协议在 repo scaffold 完成后生效。scaffold 前的自由探讨（项目想法、选型比较）不受本协议约束。
+
+## 落盘原则
+
+对话是探讨，文件是定稿。未经用户确认不写正式文档。
+用户显式说"定稿"/"生成"/"写入"才创建或更新文件。
+
+## 共识信号（多 agent 场景）
+
+当启用多 agent 协作时：
+
+- `EXECUTION` 通过（经 4 方投票）= 当前 step 共识达成
+- 共识达成后进入 `pending_sync` 状态
+- 提示用户："共识已达成，将写入正式文档？"
+
+## SSOT 声明
+
+- forum / 聊天记录是过程归档
+- `docs/design.md` 和 `docs/contracts.md` 是正式文档唯一真源
+- 当两者冲突时，以正式文档为准
+
+## 模板启用时机
+
+- **系统设计定稿时**：更新 `docs/design.md`、`docs/contracts.md`，回填 `project-context.mdc` 稳定事实层
+- **feature 拆分时**：参考 `docs/TEMPLATES.md` 生成 `docs/features/<feature>/...`
+- **简单改动**：不强制生成整套 feature 文档
+- **`prompt.md`**：仅在并行执行或批量分发（3+ task）时需要

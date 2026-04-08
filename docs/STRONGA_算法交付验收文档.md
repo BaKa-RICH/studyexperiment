@@ -986,3 +986,48 @@ $$
 $$
 
 这就是“分层一体化”和“联合一体化”的数学分界。
+
+$$
+\left\{
+\begin{aligned}
+& p_i(k+1)=p_i(k)+v_i(k)\Delta t+\frac{1}{2}u_i(k)\Delta t^2,\\
+& \left|u_i(k+1)-u_i(k)\right|\le j_i^{\max}\Delta t,\\[1mm]
+& \sum_{g\in\mathcal{G}_r}x_{r,g}+\eta_r=1,\quad \forall r\in\mathcal{R},\\
+& t_r^m \ge t_p^m+\delta_{pr}-M\!\left(1-x_{r,(p,f)}\right),\\
+& z_{m,r}\le \sum_{g=(p,f)\in\mathcal{G}_r:\,m\in\{p,f\}} x_{r,g},\\[1mm]
+& y_{ij}+y_{ji}=1,\quad \forall i\neq j,\\
+& y_{ij}+y_{jk}-1\le y_{ik},\quad \forall i,j,k\in\mathcal{V},\\
+& t_j^m \ge t_i^m+\delta_{ij}-M(1-y_{ij}).
+\end{aligned}
+\right.
+$$
+
+opus4.6版
+$$
+\begin{aligned}
+\min \; J
+= \;& w_1 \max_i T_i
++ w_2 \sum_i (T_i - T_i^{\mathrm{ref}})_+
++ w_3 \sum_{i,k} a_{i,k}^2 \Delta t
++ w_4 \sum_{i,k} \frac{(a_{i,k+1}-a_{i,k})^2}{\Delta t}
++ w_5 \sum_r \eta_r
+\end{aligned}
+$$
+
+$$
+\left\{
+\begin{aligned}
+&p_{i,k+1}=p_{i,k}+v_{i,k}\Delta t+\tfrac{1}{2}a_{i,k}\Delta t^2,\\
+&v_{i,k+1}=v_{i,k}+a_{i,k}\Delta t,\\
+&a_i^{\min}\le a_{i,k}\le a_i^{\max},\\
+&0\le v_{i,k}\le v_i^{\max},\\
+&|a_{i,k+1}-a_{i,k}|\le j_i^{\max}\Delta t,\\
+&\sum_{g\in\mathcal{G}_r} x_{r,g}+\eta_r=1,\\
+&T_r \ge T_g^{\mathrm{pre}}+h_r^{\mathrm{pre}}-M(1-x_{r,g}),\\
+&T_r \le T_g^{\mathrm{fol}}-h_r^{\mathrm{fol}}+M(1-x_{r,g}),\\
+&y_{ij}+y_{ji}=1,\\
+&T_j \ge T_i+\tau_{ij}-M(1-y_{ij}).
+\end{aligned}
+\right.
+$$
+

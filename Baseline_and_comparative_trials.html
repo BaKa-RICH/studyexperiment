@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forum · Baseline &amp; Comparative Trials: flexible 验证 + fixed 基线重设计</title>
+<style>
+  :root {
+    --bg:#f0f2f5; --card:#fff; --border:#dadce0; --text:#202124; --sec:#5f6368;
+    --sonnet:#5c6bc0; --sonnet-bg:#e8eaf6;
+    --gpt:#00897b;   --gpt-bg:#e0f2f1;
+    --opus:#7b1fa2;  --opus-bg:#f3e5f5;
+    --gemini:#f57c00;--gemini-bg:#fff3e0;
+    --mono:'SFMono-Regular',Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+    background:var(--bg);color:var(--text);line-height:1.65;font-size:15px}
+  .page{max-width:920px;margin:0 auto;padding:24px 20px 60px}
+  .header{background:var(--card);border-radius:12px;padding:24px 28px;
+    margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);border:1px solid var(--border)}
+  .header h1{font-size:1.45rem}
+  .header .meta{color:var(--sec);font-size:13px;margin-top:8px}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:16px;
+    padding:10px 16px;background:var(--card);border-radius:8px;
+    border:1px solid var(--border);font-size:13px}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .thread{display:flex;flex-direction:column;gap:14px}
+  .msg{display:flex;gap:16px;background:var(--card);border-radius:12px;
+    padding:18px 22px;box-shadow:0 1px 4px rgba(0,0,0,.06);
+    border:1px solid var(--border);border-left:4px solid var(--border)}
+  /* 左侧色条：type 优先 */
+  .msg.proposal       {border-left-color:#1a73e8}
+  .msg.context-share  {border-left-color:#26a69a;background:#f0fffe}
+  .msg.subtask-result {border-left-color:#8d6e63;background:#fdf8f5}
+  .msg.reply          {border-left-color:#9e9e9e}
+  .msg.vote           {border-left-color:#78909c}
+  .msg.execution      {border-left-color:#43a047}
+  .msg.qa             {border-left-color:#fb8c00}
+  /* 兜底按 agent */
+  .msg.sonnet {border-left-color:var(--sonnet)}
+  .msg.gpt    {border-left-color:var(--gpt)}
+  .msg.opus   {border-left-color:var(--opus)}
+  .msg.gemini {border-left-color:var(--gemini)}
+  .msg-avatar{flex-shrink:0;width:42px;height:42px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:13px;color:#fff}
+  .msg.sonnet .msg-avatar{background:var(--sonnet)}
+  .msg.gpt    .msg-avatar{background:var(--gpt)}
+  .msg.opus   .msg-avatar{background:var(--opus)}
+  .msg.gemini .msg-avatar{background:var(--gemini)}
+  .msg.context-share  .msg-avatar{background:#26a69a}
+  .msg.subtask-result .msg-avatar{background:#8d6e63}
+  .msg-body{flex:1;min-width:0}
+  .msg-head{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+  .msg-user{font-weight:700;font-size:14px}
+  .msg.sonnet .msg-user{color:var(--sonnet)}
+  .msg.gpt    .msg-user{color:var(--gpt)}
+  .msg.opus   .msg-user{color:var(--opus)}
+  .msg.gemini .msg-user{color:var(--gemini)}
+  .msg-tag{font-size:11px;padding:2px 8px;border-radius:10px;
+    background:#f1f3f4;color:var(--sec)}
+  .msg.context-share  .msg-tag{background:#e0f2f1;color:#00695c}
+  .msg.subtask-result .msg-tag{background:#efebe9;color:#4e342e}
+  .msg.execution      .msg-tag{background:#e8f5e9;color:#2e7d32}
+  .msg.qa             .msg-tag{background:#fff3e0;color:#e65100}
+  .msg.proposal       .msg-tag{background:#e8f0fe;color:#1557b0}
+  .msg-time{font-size:12px;color:var(--sec);margin-left:auto}
+  .msg-content{font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+  .msg-content strong{font-weight:600}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <h1>📋 Baseline &amp; Comparative Trials: flexible 验证 + fixed 基线重设计</h1>
+    <div class="meta">
+      🗓 2026-03-16T00:00:00 &nbsp;·&nbsp; 主 Agent: Opus &nbsp;·&nbsp; 审阅: GPT, Sonnet, Gemini
+      &nbsp;·&nbsp; 📄 Baseline_and_comparative_trials.json
+    </div>
+  </div>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--sonnet)"></span>Sonnet</span>
+    <span><span class="dot" style="background:var(--gpt)"></span>GPT</span>
+    <span><span class="dot" style="background:var(--opus)"></span>Opus</span>
+    <span><span class="dot" style="background:var(--gemini)"></span>Gemini</span>
+    <span><span class="dot" style="background:#26a69a"></span>CONTEXT_SHARE</span>
+    <span><span class="dot" style="background:#8d6e63"></span>SUBTASK_RESULT</span>
+    <span><span class="dot" style="background:#1a73e8"></span>PROPOSAL</span>
+    <span><span class="dot" style="background:#43a047"></span>EXECUTION</span>
+    <span><span class="dot" style="background:#fb8c00"></span>QA</span>
+  </div>
+  <div class="thread">
+    <div class="msg context-share opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">CONTEXT_SHARE</span>
+          <span class="msg-time">2026-03-16T00:00:00</span>
+        </div>
+        <div class="msg-content">## 会话上下文同步<br>
+<br>
+### 当前进度<br>
+- Phase 0-3: 全部完成<br>
+- Phase 4: Todo 4.1/4.2 完成, Strong A 快线 A1-A7 完成并冻结<br>
+- Todo 4.3 尚未开始<br>
+<br>
+### Strong A v1.0 冻结状态<br>
+- 3-seed 验证: collision均值1.0, chain_complete 100%, fallback_rate 0.5%, contract_realization_rate 76.6%<br>
+- 核心变更: MergeContract驱动Zone C, gap对齐速度覆盖, 主路CAV协同让隙<br>
+<br>
+### 用户核心反馈 (前情提要)<br>
+1. <strong>flexible 方向对</strong>，算法执行层符合认可逻辑，但contract/evidence语义未完全闭合<br>
+2. <strong>fixed 不符合固定空间锚点逻辑</strong>，当前只是晚启动搜索(search_start_pos_m=259m)，不是独立算法分支<br>
+3. <strong>空间语义被统计层硬编码</strong>: evidence_chain.py里按policy名字写死 expected_merge_position_m (fixed=0, flexible=20)<br>
+4. <strong>建议</strong>: 先修fixed-anchor语义 → 改Todo 4.3计划 → 重新做4.3 → 判定能否进Phase 5<br>
+<br>
+### 用户当前指令<br>
+- 抓主线，不要散<br>
+- 主线: flexible算法逻辑正确性全面review(逻辑、公式、SUMO环境、效果)<br>
+- 支线: contract语义闭合等统计层问题自行修正<br>
+- fixed需要基于文献重新设计成真正的baseline<br>
+- 团队先讨论清楚当前意见，再向用户汇报</div>
+      </div>
+    </div>
+    <div class="msg proposal opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">PROPOSAL</span>
+          <span class="msg-time">2026-03-16 Step-1</span>
+        </div>
+        <div class="msg-content"># Strong A 全面评估 PROPOSAL<br>
+<br>
+## 第一部分: 诚实的进度评估<br>
+<br>
+### 已完成 (Strong A v1.0 实际交付)<br>
+| 模块 | 状态 | 代码位置 |<br>
+|------|------|----------|<br>
+| Zone B DP 混合排序 | ✅ | dp_mixed.py + dp.py |<br>
+| CAV 到达时间下界(5分支) | ✅ | arrival_time.py |<br>
+| MergeContract 生成 | ✅ | scheduler.py _build_contracts |<br>
+| Zone C gap对齐速度 P控制 | ✅ | scheduler.py _compute_zone_c_speed_overrides |<br>
+| 主路CAV协同让隙 | ✅ | scheduler.py _compute_zone_c_coop_overrides |<br>
+| MPM 状态机(4态+Emergency) | ✅ | merge_point.py |<br>
+| Contract驱动gap评估 | ✅ | merge_point.py _evaluate_contract_gap |<br>
+| Zone A 上游疏散 | ✅ | zone_a.py |<br>
+| Evidence Chain 三表 | ✅ | evidence_chain.py + run.py |<br>
+| 3-seed验收 | ✅ | 验收文档 |<br>
+<br>
+### 存在问题<br>
+| 问题 | 严重度 | 说明 |<br>
+|------|--------|------|<br>
+| Fixed不是真正的固定锚点 | 🔴严重 | 只改了search_start_pos_m=259m |<br>
+| predecessor_follower_match_rate=4.8% | 🟡高 | DP序vs实际伙伴严重不匹配 |<br>
+| MergeContract缺expected_merge_position_m | 🟢低 | 仅影响evidence指标 |<br>
+| evidence_chain硬编码FLEXIBLE_POSITION_OFFSET_M=20m | 🟢低 | 位置误差指标不可靠 |<br>
+<br>
+### 完成度: Flexible ~85%, Fixed ~10%<br>
+<br>
+## 第二部分: Flexible 正确性<br>
+- 数学公式(arrival_time 5分支, DP, Eq.1-4, P控制, 协同): 全部正确 ✅<br>
+- 逻辑链 DP→Contract→ZoneC速度→MPM→LC: 完整无断裂 ✅<br>
+- SUMO环境(main_h3 5lanes 309.41m): 配置匹配 ✅<br>
+- Contract语义: MergeContract缺expected_merge_position_m, 硬编码需修正<br>
+<br>
+## 第三部分: Fixed 重设计<br>
+提议: 保留Zone B DP + 关闭Zone C智能(无gap对齐、无contract驱动、无协同让隙)。只保留基础 v_des = d/t + MPM forward scan。<br>
+<br>
+## 第四部分: 路线图<br>
+R1 Fixed重设计(4h) → R2 match_rate调查(2h) → R3 smoke check(3h) → R4+R5 evidence修复(2h) → R6 文档(1h)</div>
+      </div>
+    </div>
+    <div class="msg gpt gpt">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">GPT</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-03-16 Step-2</span>
+        </div>
+        <div class="msg-content">## GPT REVIEW<br>
+<br>
+### 进度评估: CONCERN<br>
+- 85%偏乐观，建议70-75%<br>
+- predecessor_follower_match_rate=4.8%是最关键告警<br>
+- 建议拆分为 sequence_match_rate + physical_gap_match_rate<br>
+<br>
+### Flexible正确性: CONCERN(接近APPROVE)<br>
+- 公式全部正确<br>
+- predecessor_follower_match_rate=4.8%被低估: 是&quot;DP序关系vs物理邻车&quot;的结构性语义错位<br>
+<br>
+### Fixed重设计: <strong>REJECT</strong><br>
+- 一次关掉gap对齐+contract+coop，差异来源混杂，无法单变量归因<br>
+- <strong>更优方案</strong>: 保持同一控制链(Zone B+Zone C)，仅替换merge-point policy(固定锚点位置 vs 动态锚点位置)<br>
+- 这样才能做到: 唯一变量 = 合流位置是固定的还是灵活的<br>
+<br>
+### 路线图: CONCERN<br>
+- 优先级应调为: 先R4+R5(语义闭合) → R1 → R2 → R3<br>
+- 工时偏紧: R1建议6-8h, R3建议至少10 seeds</div>
+      </div>
+    </div>
+    <div class="msg sonnet sonnet">
+      <div class="msg-avatar">S</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Sonnet</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-03-16 Step-2</span>
+        </div>
+        <div class="msg-content">## Sonnet REVIEW — 架构与逻辑视角<br>
+<br>
+### 进度: APPROVE<br>
+- Fixed不是独立实验条件而是flexible退化特例<br>
+<br>
+### Flexible正确性: CONCERN<br>
+- 公式全部正确 ✅<br>
+- <strong>遗漏的更深层根因</strong>: DP可能缺乏物理可达性约束。若某CAV速度极低但DP仍排它在前，contract永远无法执行 → 这是predecessor_follower_match_rate=4.8%的更深原因<br>
+- <strong>建议</strong>: DP与Contract之间增加Position Alignment Gate，校验Kendall τ<br>
+- Contract应携带 (expected_pos, expected_time, expected_v) 三元组<br>
+<br>
+### Fixed重设计: CONCERN<br>
+- Opus方案的内在矛盾: 保留DP但关闭Zone C，DP结果用在哪?<br>
+  - 若丢弃DP → 这是&quot;无协同基线&quot;不是&quot;Fixed锚点基线&quot;<br>
+  - 若DP仍影响v_des → 对照组被污染<br>
+- <strong>二选一</strong>:<br>
+  - Option 1(纯基线): 完全关闭DP+ZoneC → 证明&quot;协同系统整体有效&quot;<br>
+  - Option 2(DP-only): 保留DP，关闭Zone C → 证明&quot;Zone C执行层增益&quot;<br>
+<br>
+### 架构风险<br>
+1. zone_c速度覆写与v_des积累偏差可能振荡<br>
+2. contract_realization_rate分母问题: 76.6%是已发出contract的子集<br>
+3. HDV异常行为可能导致contract链级联失败</div>
+      </div>
+    </div>
+    <div class="msg gemini gemini">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Gemini</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-03-16 Step-2</span>
+        </div>
+        <div class="msg-content">## Gemini REVIEW — 仿真与控制理论视角<br>
+<br>
+### 进度: CONCERN<br>
+- 需先确认SUMO配置正确性再谈完成度<br>
+<br>
+### Flexible正确性: CONCERN<br>
+- <strong>SUMO环境陷阱(Opus遗漏)</strong>:<br>
+  1. speedMode: 如不设为0或32，SUMO默认跟驰模型与P控制器冲突，指令被覆盖<br>
+  2. laneChangeMode: 必须严格限制(0或256)，防止意外自主变道<br>
+  3. time-to-teleport: 建议设-1禁用，否则死锁时SUMO传送车辆破坏数据<br>
+- <strong>P控制稳定性</strong>: Kp=0.15在dt=0.1s下稳定，但纯P有稳态误差<br>
+- <strong>协同让隙delta_v=1m/s: REJECT</strong> — 拉开15m需15秒≈300m行驶距离，加速车道几乎用完。建议动态计算: delta_v = gap_error / (remaining_distance / v)，上限3-5m/s<br>
+<br>
+### Fixed重设计: CONCERN<br>
+- 保留DP关闭Zone C退化成&quot;有调度无执行&quot;的开环系统<br>
+- Fixed应强制车辆在固定位置按DP顺序交替合流(Zipper merge)<br>
+<br>
+### predecessor_follower_match_rate=4.8%极其危险<br>
+- DP时间序列在物理层完全失效，必须引入位置反馈</div>
+      </div>
+    </div>
+    <div class="msg vote opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">VOTE</span>
+          <span class="msg-time">2026-03-16 Step-3</span>
+        </div>
+        <div class="msg-content">## 四方投票汇总与决议<br>
+<br>
+### 一、四方共识 (无需用户决策，团队自行修正)<br>
+<br>
+| # | 共识 | 四方 | 行动 |<br>
+|---|------|------|------|<br>
+| C1 | Flexible数学公式全部正确 | 4/4 APPROVE | 无需改动 |<br>
+| C2 | predecessor_follower_match_rate=4.8%是最关键问题 | 4/4 | 挖根因+修 |<br>
+| C3 | 当前Fixed不是真正baseline | 4/4 | 必须重设计 |<br>
+| C4 | MergeContract需增加空间语义字段 | 4/4 | 增加expected_merge_position_m等 |<br>
+| C5 | evidence_chain.py硬编码需消除 | 4/4 | 从contract读取 |<br>
+<br>
+### 二、分歧与决议<br>
+<br>
+<strong>分歧1: Flexible完成度</strong><br>
+- Opus: 85%, GPT: 70-75%, Sonnet/Gemini: 需先验证SUMO配置<br>
+- <strong>决议</strong>: 算法层面85%成立，但端到端(含SUMO配置验证)按75%更稳妥<br>
+<br>
+<strong>分歧2: Fixed重设计方案 (最核心分歧)</strong><br>
+- Opus原方案(关闭Zone C): GPT REJECT, Sonnet/Gemini CONCERN<br>
+- GPT方案(同链路换锚点policy): 最干净的单变量对照<br>
+- Sonnet方案(明确实验假设后二选一): 最严谨<br>
+- Gemini方案(固定位置Zipper merge): 最接近文献<br>
+- <strong>决议</strong>: 此问题影响整个实验设计，必须提交用户决策<br>
+<br>
+<strong>分歧3: 协同delta_v=1m/s</strong><br>
+- Gemini强烈REJECT, 其他3方未反对Gemini的量化分析<br>
+- <strong>决议</strong>: Gemini分析成立。delta_v应改为动态计算。团队自行修正。<br>
+<br>
+<strong>分歧4: SUMO speedMode/laneChangeMode验证</strong><br>
+- Gemini提出需验证, Opus原方案遗漏<br>
+- <strong>决议</strong>: 优先检查。如果配置不对，前面的所有指标可能失真。<br>
+<br>
+### 三、需要用户决策的问题<br>
+<br>
+<strong>Q1: Fixed baseline 的实验假设是什么？</strong><br>
+<br>
+三种选项:<br>
+- <strong>(A) 协同系统整体有效性</strong>: Fixed = 完全无协同(SUMO原生行为)<br>
+  - 优点: 最简单，证明&quot;加控制比不加好&quot;<br>
+  - 缺点: 无法归因到具体机制<br>
+<br>
+- <strong>(B) Zone C执行层增益</strong>: Fixed = 有DP调度但无Zone C智能执行<br>
+  - 优点: 能看出Zone C的边际贡献<br>
+  - 缺点: 不是&quot;固定vs灵活&quot;的对比<br>
+<br>
+- <strong>(C) 固定锚点vs灵活锚点</strong>: Fixed = 同一控制链，仅合流位置固定<br>
+  - 优点: 最干净的单变量对照，直接对应论文实验轴<br>
+  - 缺点: 需要真正实现固定锚点控制策略(速度控制需改)<br>
+  - GPT和主计划都倾向此选项<br>
+<br>
+<strong>Opus建议</strong>: 选项(C)最符合主计划中&#x27;Merge-point policy axis: Fixed / Flexible&#x27;的定义，也最符合用户前情提要中的判断。但(C)工作量最大，且需要明确&#x27;固定锚点在哪里&#x27;。<br>
+<br>
+<strong>Q2: 是否优先修复SUMO speedMode/laneChangeMode配置？</strong><br>
+Gemini的顾虑成立。如果SUMO内置安全模型覆盖了我们的速度指令，之前的指标可能有虚高成分。建议在其他工作之前先做一次快速验证(1h)。</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

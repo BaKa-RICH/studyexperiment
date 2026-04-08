@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forum · feature_task - 第一波 MVP feature/task 拆分</title>
+<style>
+  :root {
+    --bg:#f0f2f5; --card:#fff; --border:#dadce0; --text:#202124; --sec:#5f6368;
+    --sonnet:#5c6bc0; --sonnet-bg:#e8eaf6;
+    --gpt:#00897b;   --gpt-bg:#e0f2f1;
+    --opus:#7b1fa2;  --opus-bg:#f3e5f5;
+    --gemini:#f57c00;--gemini-bg:#fff3e0;
+    --mono:'SFMono-Regular',Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+    background:var(--bg);color:var(--text);line-height:1.65;font-size:15px}
+  .page{max-width:920px;margin:0 auto;padding:24px 20px 60px}
+  .header{background:var(--card);border-radius:12px;padding:24px 28px;
+    margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);border:1px solid var(--border)}
+  .header h1{font-size:1.45rem}
+  .header .meta{color:var(--sec);font-size:13px;margin-top:8px}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:16px;
+    padding:10px 16px;background:var(--card);border-radius:8px;
+    border:1px solid var(--border);font-size:13px}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .thread{display:flex;flex-direction:column;gap:14px}
+  .msg{display:flex;gap:16px;background:var(--card);border-radius:12px;
+    padding:18px 22px;box-shadow:0 1px 4px rgba(0,0,0,.06);
+    border:1px solid var(--border);border-left:4px solid var(--border)}
+  /* 左侧色条：type 优先 */
+  .msg.proposal       {border-left-color:#1a73e8}
+  .msg.context-share  {border-left-color:#26a69a;background:#f0fffe}
+  .msg.subtask-result {border-left-color:#8d6e63;background:#fdf8f5}
+  .msg.reply          {border-left-color:#9e9e9e}
+  .msg.vote           {border-left-color:#78909c}
+  .msg.execution      {border-left-color:#43a047}
+  .msg.qa             {border-left-color:#fb8c00}
+  /* 兜底按 agent */
+  .msg.sonnet {border-left-color:var(--sonnet)}
+  .msg.gpt    {border-left-color:var(--gpt)}
+  .msg.opus   {border-left-color:var(--opus)}
+  .msg.gemini {border-left-color:var(--gemini)}
+  .msg-avatar{flex-shrink:0;width:42px;height:42px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:13px;color:#fff}
+  .msg.sonnet .msg-avatar{background:var(--sonnet)}
+  .msg.gpt    .msg-avatar{background:var(--gpt)}
+  .msg.opus   .msg-avatar{background:var(--opus)}
+  .msg.gemini .msg-avatar{background:var(--gemini)}
+  .msg.context-share  .msg-avatar{background:#26a69a}
+  .msg.subtask-result .msg-avatar{background:#8d6e63}
+  .msg-body{flex:1;min-width:0}
+  .msg-head{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+  .msg-user{font-weight:700;font-size:14px}
+  .msg.sonnet .msg-user{color:var(--sonnet)}
+  .msg.gpt    .msg-user{color:var(--gpt)}
+  .msg.opus   .msg-user{color:var(--opus)}
+  .msg.gemini .msg-user{color:var(--gemini)}
+  .msg-tag{font-size:11px;padding:2px 8px;border-radius:10px;
+    background:#f1f3f4;color:var(--sec)}
+  .msg.context-share  .msg-tag{background:#e0f2f1;color:#00695c}
+  .msg.subtask-result .msg-tag{background:#efebe9;color:#4e342e}
+  .msg.execution      .msg-tag{background:#e8f5e9;color:#2e7d32}
+  .msg.qa             .msg-tag{background:#fff3e0;color:#e65100}
+  .msg.proposal       .msg-tag{background:#e8f0fe;color:#1557b0}
+  .msg-time{font-size:12px;color:var(--sec);margin-left:auto}
+  .msg-content{font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+  .msg-content strong{font-weight:600}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <h1>📋 feature_task - 第一波 MVP feature/task 拆分</h1>
+    <div class="meta">
+      🗓 2026-04-05 &nbsp;·&nbsp; 主 Agent: Opus &nbsp;·&nbsp; 审阅: GPT, Sonnet, Gemini
+      &nbsp;·&nbsp; 📄 feature_task.json
+    </div>
+  </div>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--sonnet)"></span>Sonnet</span>
+    <span><span class="dot" style="background:var(--gpt)"></span>GPT</span>
+    <span><span class="dot" style="background:var(--opus)"></span>Opus</span>
+    <span><span class="dot" style="background:var(--gemini)"></span>Gemini</span>
+    <span><span class="dot" style="background:#26a69a"></span>CONTEXT_SHARE</span>
+    <span><span class="dot" style="background:#8d6e63"></span>SUBTASK_RESULT</span>
+    <span><span class="dot" style="background:#1a73e8"></span>PROPOSAL</span>
+    <span><span class="dot" style="background:#43a047"></span>EXECUTION</span>
+    <span><span class="dot" style="background:#fb8c00"></span>QA</span>
+  </div>
+  <div class="thread">
+    <div class="msg context-share opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">CONTEXT_SHARE</span>
+          <span class="msg-time">2026-04-05 19:02:20</span>
+        </div>
+        <div class="msg-content">【初始 Context】<br>
+- 任务 slug：`feature_task`<br>
+- 讨论文件固定为 `Algorithm_python/forum/feature_task.json`，HTML 面板为同目录 `feature_task.html`<br>
+- 当前目标：仅在 repo 内完成第一波 MVP 的 feature / task 拆分，生成 `docs/features/first_wave_mvp/` 下的 README、design 和任务文档骨架<br>
+- 已按要求顺序阅读：`README.md -&gt; docs/design.md -&gt; docs/contracts.md -&gt; docs/formulas.md -&gt; docs/derivations.md -&gt; .cursor/rules/project-context.mdc`<br>
+- 已补读：多 Agent 协作协议、repo `workflow.mdc`、`coding-standards.mdc`、模板 `feature-readme.base.md` / `feature-design.base.md` / `task.base.md`<br>
+- 当前 formal scope 与 README 一致：第一波只覆盖 `FIFO + fixed anchor`、`FIFO + flexible anchor`、共享 `acceptance gate`、统一 `common I/O contract`、统一时离散/参数层和首轮 3 个实验门禁；明确不进入 `simple DP`、两层分层算法、上游换道、多 partition 与更大范围协同<br>
+- 当前 repo 的 `src/`、`tests/`、`experiments/` 目录尚为空，因此本轮 task 文档将输出面向后续实现的文件白名单与顺序，不进入代码实现</div>
+      </div>
+    </div>
+    <div class="msg proposal opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">PROPOSAL</span>
+          <span class="msg-time">2026-04-05 19:02:20</span>
+        </div>
+        <div class="msg-content">【Step-0 提案：先冻结拆分原则，再并行校验任务边界】<br>
+我建议先把本轮 feature/task 拆分的边界固定下来，再进入正式文档生成。当前提案如下：<br>
+1. Feature 包固定为 `docs/features/first_wave_mvp/`，只承接正式 spec，不回写 `reference/ramp_inventory/`。<br>
+2. 任务拆分先以“实现顺序 + 契约闭环”为主，而不是按算法名切碎；初稿采用 6 个任务包：<br>
+- `T1_shared_types_and_config`：统一共享类型、`ScenarioConfig`、参数层、时离散与目录骨架<br>
+- `T2_snapshot_and_step2`：`PlanningSnapshot`、target-lane ordered objects、`FIFO fixed/flexible` 候选生成<br>
+- `T3_acceptance_gate_and_commit`：共享 `acceptance gate`、`GateResult`、`CommittedPlan`、`NO_FEASIBLE_PLAN` / commit 协议<br>
+- `T4_rollout_and_state_machine`：`COMMITTED/EXECUTING/POST_MERGE/FAIL_SAFE_STOP` 状态推进与 rollout 闭环<br>
+- `T5_experiments_and_metrics`：首轮 3 个实验入口、指标汇总、共同门禁口径<br>
+- `T6_validation_and_regression`：L1/L2/L3 验证与回归基线<br>
+3. 每个 task 文档都显式写清：依赖、白名单、禁止修改范围、验收标准、边界与后续消费关系。<br>
+4. 这一步不写代码实现，只生成可直接交给后续 agent 的 feature/task 文档骨架。<br>
+请三位审阅者重点判断：<br>
+- 这 6 个任务是否与 `design/contracts/formulas/derivations` 的正式边界一致<br>
+- 是否需要合并/重切某些任务，避免 Step 2/3、实验门禁或状态机职责混淆<br>
+- 是否遗漏了第一波必须单列的共享能力或不小心扩到了第二波范围</div>
+      </div>
+    </div>
+    <div class="msg gpt gpt">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">GPT</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-05 19:04:47</span>
+        </div>
+        <div class="msg-content">结论：Conditional Approve<br>
+- 6 个任务与第一波正式边界总体一致，未误带入 `simple DP`、分层算法、上游换道或多 partition。<br>
+- 建议硬切 `T3/T4`：`T3` 只做 `accept_candidate()/commit_candidate()` 的验收与字段锁定；`T4` 只做执行推进、状态迁移、`NO_FEASIBLE_PLAN -&gt; FAIL_SAFE_STOP/ABORTED` 的运行逻辑。<br>
+- `T2` 应显式承担“仅 1 个 active decision partition、每 tick 只服务 1 辆 ramp CAV”的对象选取与候选生成入口责任。<br>
+- 顺序应固定为 `T1 -&gt; T2 -&gt; T3 -&gt; T4 -&gt; T5 -&gt; T6`，且 `T1` 需要先产出最小目录与共享骨架。<br>
+- `T5` 与 `T6` 不必合并，但要重切为“实验入口/指标产出”与“门禁阈值/多 seed 回归断言”两层。<br>
+VOTE: conditional_approve</div>
+      </div>
+    </div>
+    <div class="msg sonnet sonnet">
+      <div class="msg-avatar">S</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Sonnet</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-05 19:04:47</span>
+        </div>
+        <div class="msg-content">结论：Conditional Approve<br>
+- `T2/T3` 存在排序协议与验收协议交叉风险；建议在 `T2` 明确 `(t_m, Δdelay, x_m)` 排序规则由 Step 2 固定，`T3` 只消费不解释。<br>
+- `T2` 作为第二个任务，需要依赖 `T1` 提前提供的 dataclass / 目录空壳，否则空目录仓库里会出现“无文件可接”的问题。<br>
+- `T4/T5` 需和 `design.md` 的 L2/L3 分层对齐：`T4` 负责闭环执行正确性，`T5` 负责三类实验入口与指标产出。<br>
+- `T3` 黑名单应显式写明：不做 `DECOMMIT`、不做 hidden replanner。<br>
+- `T6` 黑名单应显式写明：不回测 `simple DP`、分层算法、多 partition 场景。<br>
+VOTE: conditional_approve</div>
+      </div>
+    </div>
+    <div class="msg gemini gemini">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Gemini</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-05 19:04:47</span>
+        </div>
+        <div class="msg-content">结论：Conditional Approve<br>
+- `T1` 必须严格以 `docs/contracts.md` 与 `docs/formulas.md` 为唯一事实来源，先固定统一 I/O 与参数层，避免后续循环依赖。<br>
+- 建议澄清 `T3/T4` 边界：核心决策验收留在 `T3`，`T4` 纯做状态机推进与时域 rollout。<br>
+- 不应把测试全部推迟到 `T6`；`T1-T4` 的验收标准都应包含增量单元测试要求，`T6` 主要做端到端与门禁回归。<br>
+- `T2-T4` 的黑名单应显式禁止引入 `simple DP`、两层分层、上游换道和多 partition。<br>
+VOTE: conditional_approve</div>
+      </div>
+    </div>
+    <div class="msg context-share opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">CONTEXT_SHARE</span>
+          <span class="msg-time">2026-04-05 19:04:47</span>
+        </div>
+        <div class="msg-content">【Step-0 审阅收敛】<br>
+三位审阅者意见高度一致，当前需要吸收 5 条强制边界：<br>
+- `T1` 不只是共享类型说明，还必须先落最小目录/文件骨架，使空目录仓库中的后续 task 有稳定白名单可接。<br>
+- `T2` 负责单 partition / 单 ego 选取、`PlanningSnapshot`、target-lane ordered objects、FIFO 候选生成与 `objective_key=(t_m, Δdelay, x_m)` 排序；`T3` 只消费有序候选，不重复定义排序。<br>
+- `T3` 只负责共享 `acceptance gate`、`GateResult`、`commit_candidate()`、语义字段锁定与 hidden replanner 禁令；`DECOMMIT` 明确列入黑名单。<br>
+- `T4` 只负责 `rollout_step()`、执行状态机、`NO_FEASIBLE_PLAN` 等待分支和 `FAIL_SAFE_STOP/ABORTED` 降级，不承载新的决策逻辑。<br>
+- `T5` 负责实验入口与指标产出，`T6` 负责门禁阈值、多 seed 回归与端到端验证；同时 `T1-T4` 自身验收也必须包含增量单测。</div>
+      </div>
+    </div>
+    <div class="msg proposal opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">PROPOSAL</span>
+          <span class="msg-time">2026-04-05 19:04:47</span>
+        </div>
+        <div class="msg-content">【Step-0 修订提案】<br>
+吸收审阅意见后，建议把第一波 MVP feature/task 拆分固定为以下执行顺序与职责边界：<br>
+1. `T1_shared_types_and_config`<br>
+- 目标：创建最小目录骨架，并以 `docs/contracts.md` / `docs/formulas.md` 为 SSOT 固定共享 dataclass、枚举、参数常量与时离散配置。<br>
+- 责任：为 `src/`、`tests/`、`experiments/` 提供后续 task 可引用的最小文件白名单；不进入候选生成。<br>
+2. `T2_snapshot_and_step2`<br>
+- 目标：实现单 partition / 单 ramp ego 的对象选取、`build_snapshot()`、target-lane ordered objects、`FIFO fixed/flexible` 候选列表与排序。<br>
+- 责任：固定 `objective_key=(t_m, Δdelay, x_m)`、tie-break、一个 snapshot 一份候选列表；不进入 gate / commit / rollout。<br>
+3. `T3_acceptance_gate_and_commit`<br>
+- 目标：实现共享 `acceptance gate`、`GateResult`、`accept_candidate()`、`commit_candidate()` 与 `COMMITTED` 字段锁定。<br>
+- 责任：只做验收与 commit 协议；显式禁止 `DECOMMIT`、禁止 hidden replanner、禁止改写 Step 2 语义字段。<br>
+4. `T4_rollout_and_state_machine`<br>
+- 目标：实现 `rollout_step()`、执行状态机、等待分支与 fail-safe / abort。<br>
+- 责任：只消费 `CommittedPlan` 与当前世界状态，覆盖 `COMMITTED/EXECUTING/POST_MERGE/FAIL_SAFE_STOP/ABORTED` 推进；不重新选 gap、不生成新候选。<br>
+5. `T5_experiments_and_metrics`<br>
+- 目标：建立首轮 3 个实验入口、指标产出与汇总格式。<br>
+- 责任：只负责实验脚手架、配置、summary 指标与结果落盘；不定义新算法逻辑。<br>
+6. `T6_validation_and_regression`<br>
+- 目标：建立 L1/L2/L3 回归、门禁阈值断言与多 seed 验证。<br>
+- 责任：只负责验证矩阵与 regression 断言；不扩到第二波算法或多 partition 场景。<br>
+补充统一约束：<br>
+- 所有 task 都要写黑名单，明确不做 `simple DP`、两层分层、上游换道、多 partition、更大范围协同。<br>
+- `T1-T4` 的验收标准都必须包含增量单测；`T6` 负责集成/回归门禁，不吞掉前置 task 的测试责任。<br>
+- feature README 中固定建议执行顺序：`T1 -&gt; T2 -&gt; T3 -&gt; T4 -&gt; T5 -&gt; T6`。<br>
+请三位审阅者判断：修订后是否可以作为正式文档生成的定稿边界。</div>
+      </div>
+    </div>
+    <div class="msg gpt gpt">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">GPT</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-05 19:05:59</span>
+        </div>
+        <div class="msg-content">结论：Conditional Approve<br>
+- 当前 6 任务边界已基本可进入正式文档生成。<br>
+- 建议补齐 4 条可执行约束：`T2` 明确确定性 tie-break / 稳定候选编号；`T3` 明确状态转移表与非法转移处理；`T4` 明确 `wait/fail-safe/abort` 触发条件与副作用；`T5/T6` 明确 all-seed / mean / p95 / worst-seed 的门禁判定口径。<br>
+VOTE: conditional_approve</div>
+      </div>
+    </div>
+    <div class="msg sonnet sonnet">
+      <div class="msg-avatar">S</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Sonnet</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-05 19:05:59</span>
+        </div>
+        <div class="msg-content">结论：Approve<br>
+- 目录与依赖顺序已经固定，足以支撑正式文档生成。<br>
+- 黑名单与 MVP 收缩边界清晰，`T3/T4` 切口已足够干净。<br>
+- `T5/T6` 的实验与回归分工符合“先产出、再门禁”的验证逻辑。<br>
+VOTE: approve</div>
+      </div>
+    </div>
+    <div class="msg gemini gemini">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Gemini</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-05 19:05:59</span>
+        </div>
+        <div class="msg-content">结论：Approve<br>
+- `T1` 到 `T6` 的单向依赖清晰，风险可控。<br>
+- 增量单测 + 多 seed 回归的测试漏斗合理。<br>
+- 建议在 `T3/T4` 正式文档中补状态流转图，但这不影响当前进入文档生成。<br>
+VOTE: approve</div>
+      </div>
+    </div>
+    <div class="msg context-share opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">CONTEXT_SHARE</span>
+          <span class="msg-time">2026-04-05 19:05:59</span>
+        </div>
+        <div class="msg-content">【Step-0 最终收口】<br>
+第二轮复核显示：任务边界已经收敛，剩余分歧不在于是否重切任务，而在于需要把若干“实现时必须遵守的细化约束”直接写入 task 骨架。当前准备吸收的 4 条补充约束为：<br>
+- `T2` 写入“候选枚举顺序与 `candidate_id` 生成必须确定性稳定”，保证同 snapshot 下的回归可复现。<br>
+- `T3` 写入“状态转移表、非法转移处理和 `COMMITTED` 锁定规则”，但不把 rollout 副作用塞进 gate。<br>
+- `T4` 写入“`NO_FEASIBLE_PLAN`、等待、fail-safe、abort` 的触发条件、状态副作用和日志/原因码要求”。<br>
+- `T5/T6` 写入“多 seed 指标必须同时报告 mean / worst-seed / p95，并按 all-seed 安全通过 + 指定阈值判定门禁”。</div>
+      </div>
+    </div>
+    <div class="msg proposal opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">PROPOSAL</span>
+          <span class="msg-time">2026-04-05 19:05:59</span>
+        </div>
+        <div class="msg-content">【Step-0 最终提案】<br>
+在不改变 6 个 task 主边界的前提下，把上述 4 条细化约束直接吸收到 feature README / design 与对应 task 文档中，然后将该拆分作为第一波 MVP 的正式 feature/task 定稿边界。<br>
+也就是说，本轮共识对象固定为：<br>
+- 任务集合仍为 `T1` 到 `T6`<br>
+- 执行顺序仍为 `T1 -&gt; T2 -&gt; T3 -&gt; T4 -&gt; T5 -&gt; T6`<br>
+- 变更仅限于给 `T2/T3/T4/T5/T6` 增补更可执行的验收条款，不再重切任务<br>
+若三位审阅者认可，我将把当前 step 记为共识达成，并立即写入 `docs/features/first_wave_mvp/` 的正式文档骨架。</div>
+      </div>
+    </div>
+    <div class="msg gpt gpt">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">GPT</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-05 19:06:53</span>
+        </div>
+        <div class="msg-content">结论：Approve<br>
+- 6 个 task 边界与执行顺序保持不变，主依赖链完整且可落地。<br>
+- 补充的 4 条细化约束覆盖了高风险歧义点。<br>
+- 当前适合直接进入 `docs/features/first_wave_mvp/` 正式文档骨架编写。<br>
+VOTE: approve</div>
+      </div>
+    </div>
+    <div class="msg sonnet sonnet">
+      <div class="msg-avatar">S</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Sonnet</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-05 19:06:53</span>
+        </div>
+        <div class="msg-content">结论：Approve<br>
+- 6 个 task 的纵向分层符合配置 -&gt; 状态 -&gt; 决策 -&gt; 执行 -&gt; 实验 -&gt; 验证的合理依赖链。<br>
+- 追加约束已补齐确定性、状态机与多 seed 门禁的关键漏洞。<br>
+- 可直接进入正式文档骨架生成。<br>
+VOTE: approve</div>
+      </div>
+    </div>
+    <div class="msg gemini gemini">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Gemini</span>
+          <span class="msg-tag">REVIEW</span>
+          <span class="msg-time">2026-04-05 19:06:53</span>
+        </div>
+        <div class="msg-content">结论：Approve<br>
+- T2 的稳定候选枚举、T3/T4 的状态约束、T5/T6 的多 seed 门禁口径已足够支撑正式 task 文档。<br>
+- 当前方案已覆盖主要边缘用例与测试契约。<br>
+- 建议立即推进 `docs/features/first_wave_mvp/` 文档生成。<br>
+VOTE: approve</div>
+      </div>
+    </div>
+    <div class="msg vote gpt">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">GPT</span>
+          <span class="msg-tag">VOTE</span>
+          <span class="msg-time">2026-04-05 19:06:53</span>
+        </div>
+        <div class="msg-content">Step-0 投票：approve。理由：当前 6 任务边界稳定，补充约束后已可直接写入正式 feature/task 文档。</div>
+      </div>
+    </div>
+    <div class="msg vote sonnet">
+      <div class="msg-avatar">S</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Sonnet</span>
+          <span class="msg-tag">VOTE</span>
+          <span class="msg-time">2026-04-05 19:06:53</span>
+        </div>
+        <div class="msg-content">Step-0 投票：approve。理由：依赖链与职责切口已清晰，不需要再重切任务。</div>
+      </div>
+    </div>
+    <div class="msg vote gemini">
+      <div class="msg-avatar">G</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Gemini</span>
+          <span class="msg-tag">VOTE</span>
+          <span class="msg-time">2026-04-05 19:06:53</span>
+        </div>
+        <div class="msg-content">Step-0 投票：approve。理由：测试与门禁约束已收敛到可执行粒度，适合进入正式文档骨架编写。</div>
+      </div>
+    </div>
+    <div class="msg vote opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">VOTE</span>
+          <span class="msg-time">2026-04-05 19:06:53</span>
+        </div>
+        <div class="msg-content">Step-0 投票：approve。理由：拆分边界、执行顺序与文档生成约束已经达成 4 方共识。</div>
+      </div>
+    </div>
+    <div class="msg execution opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">EXECUTION</span>
+          <span class="msg-time">2026-04-05 19:06:53</span>
+        </div>
+        <div class="msg-content">【Step-0 执行通过】<br>
+4/4 赞成，当前共识已达成：<br>
+- 第一波 MVP feature 包固定为 `docs/features/first_wave_mvp/`。<br>
+- 任务集合固定为 `T1_shared_types_and_config`、`T2_snapshot_and_step2`、`T3_acceptance_gate_and_commit`、`T4_rollout_and_state_machine`、`T5_experiments_and_metrics`、`T6_validation_and_regression`。<br>
+- 建议执行顺序固定为 `T1 -&gt; T2 -&gt; T3 -&gt; T4 -&gt; T5 -&gt; T6`。<br>
+- `T2/T3/T4/T5/T6` 需吸收确定性候选枚举、状态转移/非法转移、等待/降级副作用、多 seed 门禁口径等细化约束。<br>
+- 当前 step 进入 `pending_sync`，下一步将把上述共识写入正式文档骨架。</div>
+      </div>
+    </div>
+    <div class="msg context-share opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">CONTEXT_SHARE</span>
+          <span class="msg-time">2026-04-05 19:14:24</span>
+        </div>
+        <div class="msg-content">【正式文档写入结果】<br>
+已在 `docs/features/first_wave_mvp/` 下生成第一波 MVP feature 包：`README.md`、`design.md`、`T1_shared_types_and_config.md`、`T2_snapshot_and_step2.md`、`T3_acceptance_gate_and_commit.md`、`T4_rollout_and_state_machine.md`、`T5_experiments_and_metrics.md`、`T6_validation_and_regression.md`。<br>
+- feature README 已固定任务地图、建议执行顺序、并行策略与代码预算。<br>
+- feature design 已固定实现落点、状态流转、模块映射与 4 条细化执行约束。<br>
+- 6 个 task 文档均已写明前置条件、白名单、黑名单、验收标准、消费/产出边界，并显式排除第二波能力。</div>
+      </div>
+    </div>
+    <div class="msg context-share opus">
+      <div class="msg-avatar">O</div>
+      <div class="msg-body">
+        <div class="msg-head">
+          <span class="msg-user">Opus</span>
+          <span class="msg-tag">CONTEXT_SHARE</span>
+          <span class="msg-time">2026-04-05 19:14:24</span>
+        </div>
+        <div class="msg-content">【校验结果】<br>
+- 已运行 feature 文档完整性校验：`README.md`、`design.md`、`T1-T6` 全部存在。<br>
+- 已校验每个 task 文档均包含 `前置条件`、`目标`、`白名单`、`验收标准`、`边界` 等模板核心小节。<br>
+- `ReadLints` 未报告 `docs/features/first_wave_mvp/` 下的新文档问题。<br>
+当前第一波 MVP 的 feature/task 拆分已可直接交给后续 agent 进入实现顺序。</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>A0 Flexible Timeseries</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 24px; background: #fafafa; color: #111; }
+.card { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; }
+img { max-width: 100%; height: auto; display: block; margin: 8px 0; border: 1px solid #e5e7eb; }
+</style>
+</head>
+<body>
+<div class="card">
+<h1>A0 Flexible 滚动闭环仿真图</h1>
+<p>场景：<code>p=11, m=9, s=5, v0=16.7 m/s</code>，模式：<code>flexible</code>，总 tick：<code>200</code></p>
+<p>merge tick：<code>200</code>，coordination tick：<code>0</code>，safe_wait tick：<code>0</code></p>
+<p>初始 gap(p-s)：<code>6.0 m</code>，最终 gap(p-s)：<code>60.4 m</code></p>
+<p>最终速度：<code>p=10.7</code>，<code>m=10.2</code>，<code>s=9.7</code> m/s</p>
+<p>原始数据：<code>a0_flexible_trace.csv</code></p>
+</div>
+<div class="card"><h2>p/t 图</h2><img src="a0_flexible_p_t.svg" alt="position plot" /></div>
+<div class="card"><h2>v/t 图</h2><img src="a0_flexible_v_t.svg" alt="speed plot" /></div>
+<div class="card"><h2>a/t 图</h2><img src="a0_flexible_a_t.svg" alt="acceleration plot" /></div>
+</body>
+</html>

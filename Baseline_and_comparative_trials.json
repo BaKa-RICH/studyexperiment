@@ -1,0 +1,44 @@
+{
+  "title": "Baseline & Comparative Trials: flexible 验证 + fixed 基线重设计",
+  "created": "2026-03-16T00:00:00",
+  "main_agent": "Opus",
+  "reviewers": ["GPT", "Sonnet", "Gemini"],
+  "messages": [
+    {
+      "agent": "Opus",
+      "type": "CONTEXT_SHARE",
+      "time": "2026-03-16T00:00:00",
+      "content": "## 会话上下文同步\n\n### 当前进度\n- Phase 0-3: 全部完成\n- Phase 4: Todo 4.1/4.2 完成, Strong A 快线 A1-A7 完成并冻结\n- Todo 4.3 尚未开始\n\n### Strong A v1.0 冻结状态\n- 3-seed 验证: collision均值1.0, chain_complete 100%, fallback_rate 0.5%, contract_realization_rate 76.6%\n- 核心变更: MergeContract驱动Zone C, gap对齐速度覆盖, 主路CAV协同让隙\n\n### 用户核心反馈 (前情提要)\n1. **flexible 方向对**，算法执行层符合认可逻辑，但contract/evidence语义未完全闭合\n2. **fixed 不符合固定空间锚点逻辑**，当前只是晚启动搜索(search_start_pos_m=259m)，不是独立算法分支\n3. **空间语义被统计层硬编码**: evidence_chain.py里按policy名字写死 expected_merge_position_m (fixed=0, flexible=20)\n4. **建议**: 先修fixed-anchor语义 → 改Todo 4.3计划 → 重新做4.3 → 判定能否进Phase 5\n\n### 用户当前指令\n- 抓主线，不要散\n- 主线: flexible算法逻辑正确性全面review(逻辑、公式、SUMO环境、效果)\n- 支线: contract语义闭合等统计层问题自行修正\n- fixed需要基于文献重新设计成真正的baseline\n- 团队先讨论清楚当前意见，再向用户汇报"
+    },
+    {
+      "agent": "Opus",
+      "type": "PROPOSAL",
+      "time": "2026-03-16 Step-1",
+      "content": "# Strong A 全面评估 PROPOSAL\n\n## 第一部分: 诚实的进度评估\n\n### 已完成 (Strong A v1.0 实际交付)\n| 模块 | 状态 | 代码位置 |\n|------|------|----------|\n| Zone B DP 混合排序 | ✅ | dp_mixed.py + dp.py |\n| CAV 到达时间下界(5分支) | ✅ | arrival_time.py |\n| MergeContract 生成 | ✅ | scheduler.py _build_contracts |\n| Zone C gap对齐速度 P控制 | ✅ | scheduler.py _compute_zone_c_speed_overrides |\n| 主路CAV协同让隙 | ✅ | scheduler.py _compute_zone_c_coop_overrides |\n| MPM 状态机(4态+Emergency) | ✅ | merge_point.py |\n| Contract驱动gap评估 | ✅ | merge_point.py _evaluate_contract_gap |\n| Zone A 上游疏散 | ✅ | zone_a.py |\n| Evidence Chain 三表 | ✅ | evidence_chain.py + run.py |\n| 3-seed验收 | ✅ | 验收文档 |\n\n### 存在问题\n| 问题 | 严重度 | 说明 |\n|------|--------|------|\n| Fixed不是真正的固定锚点 | 🔴严重 | 只改了search_start_pos_m=259m |\n| predecessor_follower_match_rate=4.8% | 🟡高 | DP序vs实际伙伴严重不匹配 |\n| MergeContract缺expected_merge_position_m | 🟢低 | 仅影响evidence指标 |\n| evidence_chain硬编码FLEXIBLE_POSITION_OFFSET_M=20m | 🟢低 | 位置误差指标不可靠 |\n\n### 完成度: Flexible ~85%, Fixed ~10%\n\n## 第二部分: Flexible 正确性\n- 数学公式(arrival_time 5分支, DP, Eq.1-4, P控制, 协同): 全部正确 ✅\n- 逻辑链 DP→Contract→ZoneC速度→MPM→LC: 完整无断裂 ✅\n- SUMO环境(main_h3 5lanes 309.41m): 配置匹配 ✅\n- Contract语义: MergeContract缺expected_merge_position_m, 硬编码需修正\n\n## 第三部分: Fixed 重设计\n提议: 保留Zone B DP + 关闭Zone C智能(无gap对齐、无contract驱动、无协同让隙)。只保留基础 v_des = d/t + MPM forward scan。\n\n## 第四部分: 路线图\nR1 Fixed重设计(4h) → R2 match_rate调查(2h) → R3 smoke check(3h) → R4+R5 evidence修复(2h) → R6 文档(1h)"
+    },
+    {
+      "agent": "GPT",
+      "type": "REVIEW",
+      "time": "2026-03-16 Step-2",
+      "content": "## GPT REVIEW\n\n### 进度评估: CONCERN\n- 85%偏乐观，建议70-75%\n- predecessor_follower_match_rate=4.8%是最关键告警\n- 建议拆分为 sequence_match_rate + physical_gap_match_rate\n\n### Flexible正确性: CONCERN(接近APPROVE)\n- 公式全部正确\n- predecessor_follower_match_rate=4.8%被低估: 是\"DP序关系vs物理邻车\"的结构性语义错位\n\n### Fixed重设计: **REJECT**\n- 一次关掉gap对齐+contract+coop，差异来源混杂，无法单变量归因\n- **更优方案**: 保持同一控制链(Zone B+Zone C)，仅替换merge-point policy(固定锚点位置 vs 动态锚点位置)\n- 这样才能做到: 唯一变量 = 合流位置是固定的还是灵活的\n\n### 路线图: CONCERN\n- 优先级应调为: 先R4+R5(语义闭合) → R1 → R2 → R3\n- 工时偏紧: R1建议6-8h, R3建议至少10 seeds"
+    },
+    {
+      "agent": "Sonnet",
+      "type": "REVIEW",
+      "time": "2026-03-16 Step-2",
+      "content": "## Sonnet REVIEW — 架构与逻辑视角\n\n### 进度: APPROVE\n- Fixed不是独立实验条件而是flexible退化特例\n\n### Flexible正确性: CONCERN\n- 公式全部正确 ✅\n- **遗漏的更深层根因**: DP可能缺乏物理可达性约束。若某CAV速度极低但DP仍排它在前，contract永远无法执行 → 这是predecessor_follower_match_rate=4.8%的更深原因\n- **建议**: DP与Contract之间增加Position Alignment Gate，校验Kendall τ\n- Contract应携带 (expected_pos, expected_time, expected_v) 三元组\n\n### Fixed重设计: CONCERN\n- Opus方案的内在矛盾: 保留DP但关闭Zone C，DP结果用在哪?\n  - 若丢弃DP → 这是\"无协同基线\"不是\"Fixed锚点基线\"\n  - 若DP仍影响v_des → 对照组被污染\n- **二选一**:\n  - Option 1(纯基线): 完全关闭DP+ZoneC → 证明\"协同系统整体有效\"\n  - Option 2(DP-only): 保留DP，关闭Zone C → 证明\"Zone C执行层增益\"\n\n### 架构风险\n1. zone_c速度覆写与v_des积累偏差可能振荡\n2. contract_realization_rate分母问题: 76.6%是已发出contract的子集\n3. HDV异常行为可能导致contract链级联失败"
+    },
+    {
+      "agent": "Gemini",
+      "type": "REVIEW",
+      "time": "2026-03-16 Step-2",
+      "content": "## Gemini REVIEW — 仿真与控制理论视角\n\n### 进度: CONCERN\n- 需先确认SUMO配置正确性再谈完成度\n\n### Flexible正确性: CONCERN\n- **SUMO环境陷阱(Opus遗漏)**:\n  1. speedMode: 如不设为0或32，SUMO默认跟驰模型与P控制器冲突，指令被覆盖\n  2. laneChangeMode: 必须严格限制(0或256)，防止意外自主变道\n  3. time-to-teleport: 建议设-1禁用，否则死锁时SUMO传送车辆破坏数据\n- **P控制稳定性**: Kp=0.15在dt=0.1s下稳定，但纯P有稳态误差\n- **协同让隙delta_v=1m/s: REJECT** — 拉开15m需15秒≈300m行驶距离，加速车道几乎用完。建议动态计算: delta_v = gap_error / (remaining_distance / v)，上限3-5m/s\n\n### Fixed重设计: CONCERN\n- 保留DP关闭Zone C退化成\"有调度无执行\"的开环系统\n- Fixed应强制车辆在固定位置按DP顺序交替合流(Zipper merge)\n\n### predecessor_follower_match_rate=4.8%极其危险\n- DP时间序列在物理层完全失效，必须引入位置反馈"
+    },
+    {
+      "agent": "Opus",
+      "type": "VOTE",
+      "time": "2026-03-16 Step-3",
+      "content": "## 四方投票汇总与决议\n\n### 一、四方共识 (无需用户决策，团队自行修正)\n\n| # | 共识 | 四方 | 行动 |\n|---|------|------|------|\n| C1 | Flexible数学公式全部正确 | 4/4 APPROVE | 无需改动 |\n| C2 | predecessor_follower_match_rate=4.8%是最关键问题 | 4/4 | 挖根因+修 |\n| C3 | 当前Fixed不是真正baseline | 4/4 | 必须重设计 |\n| C4 | MergeContract需增加空间语义字段 | 4/4 | 增加expected_merge_position_m等 |\n| C5 | evidence_chain.py硬编码需消除 | 4/4 | 从contract读取 |\n\n### 二、分歧与决议\n\n**分歧1: Flexible完成度**\n- Opus: 85%, GPT: 70-75%, Sonnet/Gemini: 需先验证SUMO配置\n- **决议**: 算法层面85%成立，但端到端(含SUMO配置验证)按75%更稳妥\n\n**分歧2: Fixed重设计方案 (最核心分歧)**\n- Opus原方案(关闭Zone C): GPT REJECT, Sonnet/Gemini CONCERN\n- GPT方案(同链路换锚点policy): 最干净的单变量对照\n- Sonnet方案(明确实验假设后二选一): 最严谨\n- Gemini方案(固定位置Zipper merge): 最接近文献\n- **决议**: 此问题影响整个实验设计，必须提交用户决策\n\n**分歧3: 协同delta_v=1m/s**\n- Gemini强烈REJECT, 其他3方未反对Gemini的量化分析\n- **决议**: Gemini分析成立。delta_v应改为动态计算。团队自行修正。\n\n**分歧4: SUMO speedMode/laneChangeMode验证**\n- Gemini提出需验证, Opus原方案遗漏\n- **决议**: 优先检查。如果配置不对，前面的所有指标可能失真。\n\n### 三、需要用户决策的问题\n\n**Q1: Fixed baseline 的实验假设是什么？**\n\n三种选项:\n- **(A) 协同系统整体有效性**: Fixed = 完全无协同(SUMO原生行为)\n  - 优点: 最简单，证明\"加控制比不加好\"\n  - 缺点: 无法归因到具体机制\n\n- **(B) Zone C执行层增益**: Fixed = 有DP调度但无Zone C智能执行\n  - 优点: 能看出Zone C的边际贡献\n  - 缺点: 不是\"固定vs灵活\"的对比\n\n- **(C) 固定锚点vs灵活锚点**: Fixed = 同一控制链，仅合流位置固定\n  - 优点: 最干净的单变量对照，直接对应论文实验轴\n  - 缺点: 需要真正实现固定锚点控制策略(速度控制需改)\n  - GPT和主计划都倾向此选项\n\n**Opus建议**: 选项(C)最符合主计划中'Merge-point policy axis: Fixed / Flexible'的定义，也最符合用户前情提要中的判断。但(C)工作量最大，且需要明确'固定锚点在哪里'。\n\n**Q2: 是否优先修复SUMO speedMode/laneChangeMode配置？**\nGemini的顾虑成立。如果SUMO内置安全模型覆盖了我们的速度指令，之前的指标可能有虚高成分。建议在其他工作之前先做一次快速验证(1h)。"
+    }
+  ]
+}
